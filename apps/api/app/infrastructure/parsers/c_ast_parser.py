@@ -74,8 +74,9 @@ class VariableReferenceCollector(c_ast.NodeVisitor):
 
 class FunctionAnalysisVisitor(c_ast.NodeVisitor):
     """Walks the AST of a single function definition to extract decisions, local variables, and calls."""
-    def __init__(self, stringifier: ExpressionStringifier):
+    def __init__(self, stringifier: ExpressionStringifier, known_prototypes: Optional[Dict[str, Any]] = None):
         self.stringifier = stringifier
+        self.known_prototypes = known_prototypes or {}
         self.decisions: List[NormalizedDecision] = []
         self.local_variables: List[Dict[str, str]] = []
         self.dependencies: Dict[str, NormalizedDependency] = {}
@@ -114,12 +115,30 @@ class FunctionAnalysisVisitor(c_ast.NodeVisitor):
             func_name = node.name.name
             line_num = getattr(node.coord, "line", None) if hasattr(node, "coord") and node.coord else None
             if func_name not in self.dependencies:
-                self.dependencies[func_name] = NormalizedDependency(
-                    name=func_name,
-                    type="external_function",
-                    return_type="int",  # Default inferred return type unless declared
-                    call_line_numbers=[line_num] if line_num else []
-                )
+                if func_name in self.known_prototypes:
+                    proto_ret, proto_params = self.known_prototypes[func_name]
+                    self.dependencies[func_name] = NormalizedDependency(
+                        name=func_name,
+                        type="external_function",
+                        return_type=proto_ret,
+                        parameters=proto_params,
+                        call_line_numbers=[line_num] if line_num else []
+                    )
+                else:
+                    call_params = []
+                    if node.args and hasattr(node.args, "exprs"):
+                        for idx, expr in enumerate(node.args.exprs):
+                            call_params.append(NormalizedParameter(
+                                name=f"arg_{idx+1}",
+                                type="int",
+                            ))
+                    self.dependencies[func_name] = NormalizedDependency(
+                        name=func_name,
+                        type="external_function",
+                        return_type="int",
+                        parameters=call_params,
+                        call_line_numbers=[line_num] if line_num else []
+                    )
             else:
                 if line_num:
                     self.dependencies[func_name].call_line_numbers.append(line_num)
@@ -134,7 +153,7 @@ class ClangAstSourceParser(ISourceParser):
     def __init__(self):
         self.stringifier = ExpressionStringifier()
 
-    def parse_source(self, filename: str, content: str) -> SourceAnalysisResult:
+    def parse_source(self, filename: str, content: str, external_prototypes: Optional[Dict[str, Any]] = None) -> SourceAnalysisResult:
         checksum = hashlib.sha256(content.encode("utf-8")).hexdigest()
         
         # Prepare sanitized C code for pycparser
@@ -168,6 +187,7 @@ class ClangAstSourceParser(ISourceParser):
         functions: List[NormalizedFunction] = []
         global_vars: List[Dict[str, str]] = []
         external_decls: List[str] = []
+        local_prototypes: Dict[str, Any] = dict(external_prototypes or {})
 
         if ast and ast.ext:
             for ext in ast.ext:
@@ -175,6 +195,9 @@ class ClangAstSourceParser(ISourceParser):
                     if isinstance(ext.type, c_ast.FuncDecl):
                         if ext.name and not ext.name.startswith("__sentinel"):
                             external_decls.append(ext.name)
+                            ret_t = self._extract_type_string(ext.type)
+                            params = self._extract_parameters(ext.type)
+                            local_prototypes[ext.name] = (ret_t, params)
                     elif isinstance(ext.type, c_ast.TypeDecl):
                         if ext.name and not ext.name.startswith("__sentinel"):
                             type_name = " ".join(ext.type.type.names) if hasattr(ext.type.type, "names") else "int"
@@ -186,7 +209,7 @@ class ClangAstSourceParser(ISourceParser):
                         ret_type = self._extract_type_string(ext.decl.type)
                         parameters = self._extract_parameters(ext.decl.type)
 
-                        visitor = FunctionAnalysisVisitor(self.stringifier)
+                        visitor = FunctionAnalysisVisitor(self.stringifier, known_prototypes=local_prototypes)
                         if ext.body:
                             visitor.visit(ext.body)
 
@@ -209,6 +232,7 @@ class ClangAstSourceParser(ISourceParser):
             functions=functions,
             global_variables=global_vars,
             external_declarations=external_decls,
+            known_prototypes=local_prototypes,
         )
 
     def _preprocess_code(self, content: str) -> str:

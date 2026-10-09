@@ -42,8 +42,15 @@ def run_source_analysis(project_id: str, db: Session = Depends(get_db)):
     all_fn_dtos = []
     all_dep_dtos = []
 
+    # First pass: collect prototypes across all project sources (headers and declarations)
+    project_prototypes = {}
     for src in sources:
-        parsed_result = parser.parse_source(src.filename, src.content)
+        res = parser.parse_source(src.filename, src.content)
+        if res.known_prototypes:
+            project_prototypes.update(res.known_prototypes)
+
+    for src in sources:
+        parsed_result = parser.parse_source(src.filename, src.content, external_prototypes=project_prototypes)
 
         for fn in parsed_result.functions:
             fn_model = FunctionModel(

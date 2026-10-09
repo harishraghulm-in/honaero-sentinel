@@ -20,6 +20,7 @@ from apps.api.app.domain.enums import ExecutionStatus, EvidenceFreshness
 from apps.api.app.application.services import (
     StubGeneratorService,
     StubDefinition,
+    StubParameterSpec,
     HarnessGeneratorService,
     HarnessGeneratorRequest,
     HookDefinition,
@@ -80,17 +81,32 @@ def trigger_execution(project_id: str, payload: ExecutionCreate, db: Session = D
 
     # 2. Fetch stubs
     stubs = db.query(StubConfiguration).filter_by(project_id=project_id).all()
-    stub_defs = [
-        StubDefinition(
-            function_name=s.function_name,
-            return_values=s.return_values,
-            output_params=s.output_params,
-            expected_call_count=s.expected_call_count,
-            call_order=s.call_order,
-            custom_c_body=s.custom_c_body,
+    stub_defs = []
+    for s in stubs:
+        dep = s.dependency
+        ret_t = dep.return_type if (dep and dep.return_type) else "int"
+        param_specs = []
+        if dep and dep.parameters:
+            for p in dep.parameters:
+                param_specs.append(
+                    StubParameterSpec(
+                        name=p.get("name", "arg"),
+                        type=p.get("type", "int"),
+                        is_pointer=p.get("is_pointer", False),
+                    )
+                )
+        stub_defs.append(
+            StubDefinition(
+                function_name=s.function_name,
+                return_type=ret_t,
+                parameters=param_specs,
+                return_values=s.return_values,
+                output_params=s.output_params,
+                expected_call_count=s.expected_call_count,
+                call_order=s.call_order,
+                custom_c_body=s.custom_c_body,
+            )
         )
-        for s in stubs
-    ]
     gen_stubs = stub_service.generate_stubs(stub_defs) if stub_defs else None
 
     # 3. Fetch hooks

@@ -101,7 +101,7 @@ class LocalProcessExecutionEngine(IExecutionEngine):
 
             if is_windows:
                 runner_script = workspace_dir / "sentinel_runner.py"
-                runner_content = f"""import sys, os, ctypes
+                runner_content = f"""import sys, os, time, ctypes
 gcc_parent = r"{gcc_parent}"
 if hasattr(os, "add_dll_directory"):
     try:
@@ -109,14 +109,18 @@ if hasattr(os, "add_dll_directory"):
     except Exception:
         pass
 dll_path = os.path.abspath(r"{bin_path.name}")
-try:
-    dll = ctypes.CDLL(dll_path)
-    fn = getattr(dll, "sentinel_execute_harness")
-    code = fn()
-    sys.exit(code)
-except Exception as e:
-    sys.stderr.write(f"Isolated worker error: {{str(e)}}\\n")
-    sys.exit(1)
+last_err = None
+for _ in range(5):
+    try:
+        dll = ctypes.CDLL(dll_path)
+        fn = getattr(dll, "sentinel_execute_harness")
+        code = fn()
+        sys.exit(code)
+    except Exception as e:
+        last_err = e
+        time.sleep(0.3)
+sys.stderr.write(f"Isolated worker error: {{str(last_err)}}\\n")
+sys.exit(1)
 """
                 runner_script.write_text(runner_content, encoding="utf-8")
                 cmd = [sys.executable, "sentinel_runner.py"]
