@@ -39,11 +39,13 @@ from apps.api.app.domain.interfaces.source_parser import (
 from apps.api.app.infrastructure.execution.process_engine import LocalProcessExecutionEngine
 from apps.api.app.infrastructure.execution.interface import ExecutionRequest
 from apps.api.app.infrastructure.coverage.gcov import GcovCoverageProvider
+from typing import List, Optional
 from apps.api.app.schemas.sentinel_api import (
     ExecutionCreate,
     ExecutionResponse,
     CoverageResponse,
     MCDCResponse,
+    ExecutionComparisonResponse,
 )
 
 router = APIRouter(prefix="/projects/{project_id}/executions", tags=["Executions & Verification"])
@@ -322,7 +324,124 @@ def trigger_execution(project_id: str, payload: ExecutionCreate, db: Session = D
         exit_code=exec_record.exit_code,
         duration_ms=exec_record.duration_ms,
         results_summary=exec_record.results_summary,
+        stdout=exec_record.stdout,
+        stderr=exec_record.stderr,
         created_at=exec_record.created_at,
+    )
+
+
+@router.get("", response_model=List[ExecutionResponse])
+def list_executions(project_id: str, db: Session = Depends(get_db)):
+    execs = db.query(Execution).filter_by(project_id=project_id).order_by(Execution.created_at.desc()).all()
+    return [
+        ExecutionResponse(
+            id=ex.id,
+            execution_id=ex.id,
+            project_id=ex.project_id,
+            test_case_id=ex.test_case_id,
+            status=ex.status,
+            exit_code=ex.exit_code,
+            duration_ms=ex.duration_ms,
+            results_summary=ex.results_summary,
+            stdout=ex.stdout,
+            stderr=ex.stderr,
+            created_at=ex.created_at,
+        )
+        for ex in execs
+    ]
+
+
+@router.get("/compare", response_model=ExecutionComparisonResponse)
+def compare_executions(
+    project_id: str,
+    base: Optional[str] = None,
+    target: Optional[str] = None,
+    idA: Optional[str] = None,
+    idB: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    base_id = base or idA
+    target_id = target or idB
+    if not base_id or not target_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "INVALID_PARAMS", "message": "Both base and target execution IDs required"},
+        )
+    ex_base = db.query(Execution).filter_by(id=base_id, project_id=project_id).first()
+    ex_target = db.query(Execution).filter_by(id=target_id, project_id=project_id).first()
+    if not ex_base or not ex_target:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "EXECUTION_NOT_FOUND", "message": "One or both executions not found"},
+        )
+
+    diffs = []
+    regressions = 0
+    fixed = 0
+
+    base_status = ex_base.status.value if hasattr(ex_base.status, "value") else str(ex_base.status)
+    target_status = ex_target.status.value if hasattr(ex_target.status, "value") else str(ex_target.status)
+
+    if base_status != target_status:
+        diffs.append({
+            "type": "verdict",
+            "attribute": "status",
+            "base": base_status,
+            "target": target_status,
+        })
+        if base_status == "PASSED" and target_status != "PASSED":
+            regressions += 1
+        elif base_status != "PASSED" and target_status == "PASSED":
+            fixed += 1
+
+    if ex_base.source_checksum != ex_target.source_checksum:
+        diffs.append({
+            "type": "source",
+            "attribute": "source_checksum",
+            "base": ex_base.source_checksum,
+            "target": ex_target.source_checksum,
+        })
+
+    # Compare coverage
+    cov_base = db.query(CoverageResult).filter_by(execution_id=base_id).first()
+    cov_target = db.query(CoverageResult).filter_by(execution_id=target_id).first()
+    if cov_base and cov_target:
+        if cov_target.statement_coverage_pct < cov_base.statement_coverage_pct:
+            regressions += 1
+            diffs.append({
+                "type": "coverage_regression",
+                "attribute": "statement_coverage_pct",
+                "base": cov_base.statement_coverage_pct,
+                "target": cov_target.statement_coverage_pct,
+            })
+        elif cov_target.statement_coverage_pct > cov_base.statement_coverage_pct:
+            fixed += 1
+            diffs.append({
+                "type": "coverage_increase",
+                "attribute": "statement_coverage_pct",
+                "base": cov_base.statement_coverage_pct,
+                "target": cov_target.statement_coverage_pct,
+            })
+
+    return ExecutionComparisonResponse(
+        regressionCount=regressions,
+        fixedCount=fixed,
+        diffs=diffs,
+    )
+
+
+@router.post("/{execution_id}/rerun", response_model=ExecutionResponse, status_code=status.HTTP_201_CREATED)
+def rerun_execution(project_id: str, execution_id: str, db: Session = Depends(get_db)):
+    ex = db.query(Execution).filter_by(id=execution_id, project_id=project_id).first()
+    if not ex:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "EXECUTION_NOT_FOUND", "message": f"Execution {execution_id} not found"},
+        )
+    return trigger_execution(
+        project_id=project_id,
+        payload=ExecutionCreate(test_case_id=ex.test_case_id),
+        db=db,
     )
 
 
@@ -343,6 +462,8 @@ def get_execution(project_id: str, execution_id: str, db: Session = Depends(get_
         exit_code=ex.exit_code,
         duration_ms=ex.duration_ms,
         results_summary=ex.results_summary,
+        stdout=ex.stdout,
+        stderr=ex.stderr,
         created_at=ex.created_at,
     )
 

@@ -2,7 +2,8 @@ export const apiClient = async <T>(
   endpoint: string,
   options?: RequestInit
 ): Promise<T> => {
-  const url = `/api/v1${endpoint}`;
+  const apiBase = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL) ? String(import.meta.env.VITE_API_URL).replace(/\/$/, '') : '';
+  const url = apiBase ? `${apiBase}/api/v1${endpoint}` : `/api/v1${endpoint}`;
   const response = await fetch(url, {
     ...options,
     headers: {

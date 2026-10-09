@@ -259,3 +259,160 @@ int cabin_pressure_control(int pressure, int altitude) {
     res_exp_md = client.get(f"/api/v1/projects/{proj_id}/evidence/export?format=md")
     assert res_exp_md.status_code == 200
     assert len(res_exp_md.content) > 0
+
+
+def test_regression_rerun_config_and_diagnostics_workflow(client):
+    """Verifies build config management, failure diagnostics, regression comparison, historical rerun, and AI assistant."""
+    # 1. Create project
+    res_proj = client.post("/api/v1/projects", json={
+        "name": "Actuator Flight Control Integration",
+        "description": "Integration testing for flight control actuator with fail-safe logic."
+    })
+    assert res_proj.status_code == 201
+    proj_id = res_proj.json()["id"]
+
+    # 2. Compiler configuration GET and PUT
+    res_cfg_get = client.get(f"/api/v1/projects/{proj_id}/config")
+    assert res_cfg_get.status_code == 200
+    cfg = res_cfg_get.json()
+    assert "compiler" in cfg
+    assert "cStandard" in cfg
+
+    res_cfg_put = client.put(f"/api/v1/projects/{proj_id}/config", json={
+        "compiler": "gcc",
+        "optimization": "-O0",
+        "warnings": ["-Wall", "-Wextra"],
+        "defines": ["SENTINEL_SIM=1"],
+        "includeDirs": ["include"],
+        "cStandard": "c11"
+    })
+    assert res_cfg_put.status_code == 200
+    updated_cfg = res_cfg_put.json()
+    assert updated_cfg["optimization"] == "-O0"
+    assert "SENTINEL_SIM=1" in updated_cfg["defines"]
+
+    # 3. AI assistant endpoints
+    res_models = client.get("/api/v1/ai/models")
+    assert res_models.status_code == 200
+    models = res_models.json()
+    assert len(models) >= 1
+    assert any("nim" in m["id"] or "llama" in m["id"] for m in models)
+
+    res_ai_req = client.post(f"/api/v1/projects/{proj_id}/ai/requirements", json={
+        "document": "The actuator shall extend when commanded and pressure > 100 psi."
+    })
+    assert res_ai_req.status_code == 200
+    assert "DO-178C" in res_ai_req.json()["disclaimer"]
+
+    # 4. Import source code
+    source_c = """
+int actuator_command(int cmd, int pressure) {
+    if (cmd == 1 && pressure > 100) {
+        return 1;
+    }
+    return 0;
+}
+"""
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("src/actuator.c", source_c)
+    zip_b64 = base64.b64encode(zip_buffer.getvalue()).decode("utf-8")
+
+    res_zip = client.post(f"/api/v1/projects/{proj_id}/sources/import-zip", json={
+        "archive_base64": zip_b64,
+        "archive_format": "zip",
+    })
+    assert res_zip.status_code == 201
+
+    res_analysis = client.post(f"/api/v1/projects/{proj_id}/analyze")
+    assert res_analysis.status_code == 200
+    fn_obj = res_analysis.json()["functions"][0]
+    fn_id = fn_obj["id"]
+
+    # 5. Suggest tests endpoint
+    res_sug_tests = client.post(f"/api/v1/projects/{proj_id}/suggest-tests?function_id={fn_id}")
+    assert res_sug_tests.status_code == 200
+    sug_tests = res_sug_tests.json()
+    assert len(sug_tests) >= 1
+
+    # 6. Create Test Suite and Test Cases
+    res_suite = client.post(f"/api/v1/projects/{proj_id}/test-suites", json={
+        "name": "Actuator Unit Suite",
+        "description": "Validation suite for actuator control logic."
+    })
+    assert res_suite.status_code == 201
+    suite_id = res_suite.json()["id"]
+
+    # Test Case 1: Passing test
+    res_tc1 = client.post(f"/api/v1/projects/{proj_id}/test-cases", json={
+        "test_suite_id": suite_id,
+        "target_function_id": fn_id,
+        "name": "TC_Actuator_Passing",
+        "inputs": {"cmd": 1, "pressure": 150},
+        "expected_outputs": {"return": 1}
+    })
+    assert res_tc1.status_code == 201
+    tc1_id = res_tc1.json()["id"]
+
+    # Test Case 2: Assertion failure test (expects 1 when function returns 0)
+    res_tc2 = client.post(f"/api/v1/projects/{proj_id}/test-cases", json={
+        "test_suite_id": suite_id,
+        "target_function_id": fn_id,
+        "name": "TC_Actuator_Failing_Assertion",
+        "inputs": {"cmd": 0, "pressure": 50},
+        "expected_outputs": {"return": 1}  # Function returns 0 for cmd=0
+    })
+    assert res_tc2.status_code == 201
+    tc2_id = res_tc2.json()["id"]
+
+    # 7. Execute both tests
+    res_exec1 = client.post(f"/api/v1/projects/{proj_id}/executions", json={
+        "test_case_id": tc1_id,
+        "timeout_seconds": 10
+    })
+    assert res_exec1.status_code == 201
+    exec1 = res_exec1.json()
+    assert exec1["status"] in ("PASS", "PASSED")
+    assert exec1["verdict"] == "PASS"
+
+    res_exec2 = client.post(f"/api/v1/projects/{proj_id}/executions", json={
+        "test_case_id": tc2_id,
+        "timeout_seconds": 10
+    })
+    assert res_exec2.status_code == 201
+    exec2 = res_exec2.json()
+    assert exec2["status"] in ("FAIL", "FAILED")
+    assert exec2["verdict"] == "FAIL"
+
+    # AI explain endpoint on failing execution
+    res_ai_exp = client.post(f"/api/v1/projects/{proj_id}/ai/explain", json={
+        "failure_logs": exec2.get("logs", "Assertion failed: expected 1, actual 0")
+    })
+    assert res_ai_exp.status_code == 200
+    assert "DO-178C" in res_ai_exp.json()["disclaimer"]
+
+    # 8. Execution History
+    res_history = client.get(f"/api/v1/projects/{proj_id}/executions")
+    assert res_history.status_code == 200
+    history = res_history.json()
+    assert len(history) >= 2
+    # Verify both executions exist in history
+    hist_ids = [h["id"] for h in history]
+    assert exec1["id"] in hist_ids
+    assert exec2["id"] in hist_ids
+
+    # 9. Execution Comparison / Regression
+    res_comp = client.get(f"/api/v1/projects/{proj_id}/executions/compare?base={exec1['id']}&target={exec2['id']}")
+    assert res_comp.status_code == 200
+    comp = res_comp.json()
+    assert "regressionCount" in comp
+    assert "fixedCount" in comp
+
+    # 10. Historical Rerun
+    res_rerun = client.post(f"/api/v1/projects/{proj_id}/executions/{exec1['id']}/rerun")
+    assert res_rerun.status_code == 201
+    rerun_data = res_rerun.json()
+    assert rerun_data["id"] != exec1["id"]  # Created new execution
+    assert rerun_data["status"] in ("PASS", "PASSED")
+    assert rerun_data["verdict"] == "PASS"
+

@@ -101,3 +101,65 @@ def update_stub(project_id: str, stub_id: str, payload: StubUpdate, db: Session 
 def list_stubs(project_id: str, db: Session = Depends(get_db)):
     return db.query(StubConfiguration).filter_by(project_id=project_id).all()
 
+
+@router.delete("/stubs/{stub_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_stub(project_id: str, stub_id: str, db: Session = Depends(get_db)):
+    stub = db.query(StubConfiguration).filter_by(id=stub_id, project_id=project_id).first()
+    if not stub:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "STUB_NOT_FOUND", "message": f"Stub {stub_id} not found"},
+        )
+    if stub.dependency:
+        stub.dependency.mode = DependencyMode.REAL
+    db.delete(stub)
+    db.commit()
+    return None
+
+
+@router.post("/dependencies", response_model=DependencyDTO, status_code=status.HTTP_201_CREATED)
+def create_dependency(project_id: str, payload: dict, db: Session = Depends(get_db)):
+    dep = Dependency(
+        project_id=project_id,
+        name=payload.get("name", "unnamed_dep"),
+        return_type=payload.get("return_type") or payload.get("returnType") or "int",
+        mode=DependencyMode.STUB if payload.get("isResolved") is False else DependencyMode.REAL,
+    )
+    db.add(dep)
+    db.commit()
+    db.refresh(dep)
+    return DependencyDTO(
+        id=dep.id,
+        name=dep.name,
+        type=dep.dep_type.value if hasattr(dep.dep_type, "value") else str(dep.dep_type),
+        return_type=dep.return_type,
+        mode=dep.mode,
+        file="",
+        isResolved=True,
+    )
+
+
+@router.put("/dependencies/{dep_id}", response_model=DependencyDTO)
+def update_dependency(project_id: str, dep_id: str, payload: dict, db: Session = Depends(get_db)):
+    dep = db.query(Dependency).filter_by(id=dep_id, project_id=project_id).first()
+    if not dep:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "DEPENDENCY_NOT_FOUND", "message": f"Dependency {dep_id} not found"},
+        )
+    if "name" in payload:
+        dep.name = payload["name"]
+    if "mode" in payload:
+        dep.mode = DependencyMode(payload["mode"])
+    db.commit()
+    db.refresh(dep)
+    return DependencyDTO(
+        id=dep.id,
+        name=dep.name,
+        type=dep.dep_type.value if hasattr(dep.dep_type, "value") else str(dep.dep_type),
+        return_type=dep.return_type,
+        mode=dep.mode,
+        file="",
+        isResolved=True,
+    )
+

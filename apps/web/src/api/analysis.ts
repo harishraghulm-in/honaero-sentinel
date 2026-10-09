@@ -15,13 +15,35 @@ export interface DataType {
   type: string;
 }
 
+export interface AnalysisParameter {
+  name: string;
+  type: string;
+}
+
+export interface AnalysisCondition {
+  id: string;
+  expression: string;
+  variable_references?: string[];
+}
+
+export interface AnalysisDecision {
+  id: string;
+  expression: string;
+  line_number?: number;
+  conditions?: AnalysisCondition[];
+}
+
 export interface FunctionNode {
   id: string;
   name: string;
-  signature: string;
-  file: string;
-  startLine: number;
-  endLine: number;
+  return_type?: string;
+  signature?: string;
+  file?: string;
+  startLine?: number;
+  endLine?: number;
+  parameters?: AnalysisParameter[];
+  decisions?: AnalysisDecision[];
+  is_target_under_test?: boolean;
 }
 
 export interface AnalysisJob {
@@ -32,11 +54,14 @@ export interface AnalysisJob {
 }
 
 export interface AnalysisResult {
-  id: string;
-  job: AnalysisJob;
-  functions: FunctionNode[];
-  dataTypes: DataType[];
-  diagnostics: Diagnostic[];
+  id?: string;
+  project_id?: string;
+  total_sources?: number;
+  job?: AnalysisJob;
+  functions?: FunctionNode[];
+  dependencies?: any[];
+  dataTypes?: DataType[];
+  diagnostics?: Diagnostic[];
 }
 
 export const analyzeProject = (projectId: string) => apiClient<{ execution_id: string }>(`/projects/${projectId}/analyze`, { method: 'POST' });

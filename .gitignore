@@ -85,5 +85,10 @@ tmp/
 *.swp
 *.swo
 *~
-.DS_Store
-Thumbs.db
+# Node & Frontend
+node_modules/
+dist/
+
+# Test harnesses generated during test runs
+test_generated_harness/
+

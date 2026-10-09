@@ -11,6 +11,8 @@ from apps.api.app.api.routes import (
     traceability,
     evidence,
     requirements,
+    config,
+    ai,
 )
 
 # Root probes
@@ -30,4 +32,6 @@ api_v1_router.include_router(executions.router)
 api_v1_router.include_router(traceability.router)
 api_v1_router.include_router(evidence.router)
 api_v1_router.include_router(evidence.project_evidence_router)
+api_v1_router.include_router(config.router)
+api_v1_router.include_router(ai.router)
 
