@@ -30,6 +30,27 @@ def create_test_suite(project_id: str, payload: TestSuiteCreate, db: Session = D
     return suite
 
 
+@router.get("/test-suites", response_model=List[TestSuiteResponse])
+def list_test_suites(project_id: str, db: Session = Depends(get_db)):
+    project = db.query(Project).filter_by(id=project_id).first()
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "PROJECT_NOT_FOUND", "message": f"Project {project_id} not found"},
+        )
+
+    suites = db.query(TestSuite).filter_by(project_id=project_id).all()
+    return [
+        TestSuiteResponse(
+            id=s.id,
+            project_id=s.project_id,
+            name=s.name,
+            description=s.description,
+        )
+        for s in suites
+    ]
+
+
 @router.post("/test-cases", response_model=TestCaseResponse, status_code=status.HTTP_201_CREATED)
 def create_test_case(project_id: str, payload: TestCaseCreate, db: Session = Depends(get_db)):
     fn = db.query(FunctionModel).filter_by(id=payload.target_function_id, project_id=project_id).first()

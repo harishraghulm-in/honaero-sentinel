@@ -20,10 +20,11 @@ class TraceabilityGraph(BaseModel):
     project_id: str
     nodes: List[TraceabilityNode] = Field(default_factory=list)
     edges: List[TraceabilityEdge] = Field(default_factory=list)
+    links: List[Dict[str, Any]] = Field(default_factory=list)
 
 
 class TraceabilityService:
-    """Builds and exposes the complete verification traceability graph."""
+    """Builds and exposes the complete verification traceability graph and requirement mapping."""
 
     def build_graph(
         self,
@@ -36,6 +37,7 @@ class TraceabilityService:
     ) -> TraceabilityGraph:
         nodes: List[TraceabilityNode] = []
         edges: List[TraceabilityEdge] = []
+        links_for_frontend: List[Dict[str, Any]] = []
 
         # Requirements
         for r in requirements:
@@ -46,6 +48,10 @@ class TraceabilityService:
                 label=f"{r.identifier}: {r.title}",
                 metadata={"req_type": r.req_type.value if hasattr(r.req_type, "value") else str(r.req_type)}
             ))
+            links_for_frontend.append({
+                "reqId": r.identifier,
+                "description": r.title,
+            })
 
         # Functions
         for f in functions:
@@ -112,5 +118,56 @@ class TraceabilityService:
             project_id=project_id,
             nodes=nodes,
             edges=edges,
+            links=links_for_frontend,
         )
+
+    def suggest_links(
+        self,
+        requirements: List[Any],
+        functions: List[Any],
+        confidence_threshold: float = 0.4,
+    ) -> List[Dict[str, Any]]:
+        """Suggests candidate links between requirements and functions without assuming code correctness."""
+        suggestions: List[Dict[str, Any]] = []
+
+        for req in requirements:
+            req_text = f"{req.identifier} {req.title} {req.description}".lower()
+            for fn in functions:
+                score = 0.0
+                reasons: List[str] = []
+
+                # Exact function name mentioned
+                if fn.name.lower() in req_text:
+                    score += 0.6
+                    reasons.append(f"Function name '{fn.name}' explicitly mentioned in requirement")
+
+                # Keyword overlap with function name parts
+                fn_parts = [p for p in fn.name.lower().split("_") if len(p) > 2]
+                matched_parts = [p for p in fn_parts if p in req_text]
+                if matched_parts:
+                    part_score = min(0.3, len(matched_parts) * 0.1)
+                    score += part_score
+                    reasons.append(f"Matched keyword tokens: {', '.join(matched_parts)}")
+
+                # Parameter references in requirement
+                if hasattr(fn, "parameters") and fn.parameters:
+                    param_names = [p.get("name", "").lower() for p in fn.parameters if isinstance(p, dict)]
+                    matched_params = [p for p in param_names if p and p in req_text]
+                    if matched_params:
+                        score += min(0.3, len(matched_params) * 0.15)
+                        reasons.append(f"Matched parameter tokens: {', '.join(matched_params)}")
+
+                score = min(1.0, score)
+                if score >= confidence_threshold:
+                    suggestions.append({
+                        "requirement_id": req.id,
+                        "requirement_identifier": req.identifier,
+                        "function_id": fn.id,
+                        "function_name": fn.name,
+                        "confidence_score": round(score, 2),
+                        "rationale": "; ".join(reasons),
+                        "status": "SUGGESTED",
+                    })
+
+        return suggestions
 

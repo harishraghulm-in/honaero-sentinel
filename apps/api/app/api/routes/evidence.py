@@ -23,8 +23,10 @@ def get_execution_evidence(project_id: str, execution_id: str, db: Session = Dep
             detail={"code": "EVIDENCE_NOT_FOUND", "message": f"Evidence for execution {execution_id} not found"},
         )
 
-    # Re-evaluate freshness against current project source files
-    current_sources = {s.filename: s.content for s in db.query(SourceFile).filter_by(project_id=project_id).all()}
+    current_sources = {
+        (s.filepath if s.filepath else s.filename): s.content
+        for s in db.query(SourceFile).filter_by(project_id=project_id).all()
+    }
     current_src_hash = ev_service.compute_source_checksum(current_sources)
     freshness = ev_service.evaluate_freshness(
         current_source_hash=current_src_hash,
@@ -93,4 +95,38 @@ def export_evidence_record(project_id: str, execution_id: str, format: str = "js
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={"code": "UNSUPPORTED_FORMAT", "message": f"Format '{format}' not supported. Use 'json' or 'md'"},
         )
+
+
+project_evidence_router = APIRouter(prefix="/projects/{project_id}/evidence", tags=["Evidence"])
+
+
+@project_evidence_router.get("", response_model=EvidenceResponse)
+def get_latest_project_evidence(project_id: str, db: Session = Depends(get_db)):
+    project = db.query(Project).filter_by(id=project_id).first()
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "PROJECT_NOT_FOUND", "message": f"Project {project_id} not found"},
+        )
+
+    ev = db.query(EvidenceRecord).filter_by(project_id=project_id).order_by(EvidenceRecord.created_at.desc()).first()
+    if not ev:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "EVIDENCE_NOT_FOUND", "message": f"No evidence generated yet for project {project_id}"},
+        )
+
+    return get_execution_evidence(project_id=project_id, execution_id=ev.execution_id, db=db)
+
+
+@project_evidence_router.get("/export")
+@project_evidence_router.post("/export")
+def export_latest_project_evidence(project_id: str, format: str = "json", db: Session = Depends(get_db)):
+    ev = db.query(EvidenceRecord).filter_by(project_id=project_id).order_by(EvidenceRecord.created_at.desc()).first()
+    if not ev:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "EVIDENCE_NOT_FOUND", "message": f"No evidence generated yet for project {project_id}"},
+        )
+    return export_evidence_record(project_id=project_id, execution_id=ev.execution_id, format=format, db=db)
 

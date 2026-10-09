@@ -75,12 +75,14 @@ class StubGeneratorService:
             source_lines.append(f"/* State variables for {fn} */")
             source_lines.append(f"static int __sentinel_stub_call_count_{fn} = 0;")
             
-            # Successive return values array
-            ret_vals = stub.return_values if stub.return_values else [0]
-            c_ret_vals = ", ".join(self._format_c_value(v, ret_type) for v in ret_vals)
-            source_lines.append(f"static const {ret_type} __sentinel_stub_ret_vals_{fn}[] = {{ {c_ret_vals} }};")
-            source_lines.append(f"static const int __sentinel_stub_ret_count_{fn} = {len(ret_vals)};")
-            source_lines.append("")
+            # Successive return values array (only for non-void functions)
+            if ret_type != "void":
+                ret_vals = stub.return_values if stub.return_values else [0]
+                c_ret_vals = ", ".join(self._format_c_value(v, ret_type) for v in ret_vals)
+                source_lines.append(f"static const {ret_type} __sentinel_stub_ret_vals_{fn}[] = {{ {c_ret_vals} }};")
+                source_lines.append(f"static const int __sentinel_stub_ret_count_{fn} = {len(ret_vals)};")
+                source_lines.append("")
+
 
             # Reset function
             source_lines.append(f"void sentinel_stub_reset_{fn}(void) {{")

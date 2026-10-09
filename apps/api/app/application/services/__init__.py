@@ -33,6 +33,14 @@ from apps.api.app.application.services.traceability_service import (
     TraceabilityNode,
     TraceabilityEdge,
 )
+from apps.api.app.application.services.requirement_service import (
+    RequirementService,
+    ExtractedRequirementDTO,
+    CandidateCaseDTO,
+)
+from apps.api.app.application.services.source_archive_service import (
+    SourceArchiveService,
+)
 
 __all__ = [
     "StubGeneratorService",
@@ -58,5 +66,9 @@ __all__ = [
     "TraceabilityGraph",
     "TraceabilityNode",
     "TraceabilityEdge",
+    "RequirementService",
+    "ExtractedRequirementDTO",
+    "CandidateCaseDTO",
+    "SourceArchiveService",
 ]
 

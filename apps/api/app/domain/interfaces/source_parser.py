@@ -48,11 +48,12 @@ class SourceAnalysisResult(BaseModel):
     functions: List[NormalizedFunction] = Field(default_factory=list)
     global_variables: List[Dict[str, str]] = Field(default_factory=list)
     external_declarations: List[str] = Field(default_factory=list)
+    known_prototypes: Dict[str, Any] = Field(default_factory=dict)
 
 
 class ISourceParser(ABC):
     @abstractmethod
-    def parse_source(self, filename: str, content: str) -> SourceAnalysisResult:
+    def parse_source(self, filename: str, content: str, external_prototypes: Optional[Dict[str, Any]] = None) -> SourceAnalysisResult:
         """Parses C/C++ source code into a normalized Sentinel AST representation."""
         pass
 

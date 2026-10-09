@@ -9,7 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from apps.api.app.main import app
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 def client():
     with TestClient(app) as test_client:
         yield test_client
