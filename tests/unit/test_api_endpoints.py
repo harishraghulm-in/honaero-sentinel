@@ -88,6 +88,7 @@ def test_full_api_workflow(client):
     assert res.status_code == 201
     exec_data = res.json()
     exec_id = exec_data["execution_id"]
+    assert exec_data["id"] == exec_id
     assert exec_data["status"] == "PASSED"
     assert exec_data["exit_code"] == 0
 

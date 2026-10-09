@@ -242,6 +242,7 @@ def trigger_execution(project_id: str, payload: ExecutionCreate, db: Session = D
     db.refresh(exec_record)
 
     return ExecutionResponse(
+        id=exec_record.id,
         execution_id=exec_record.id,
         project_id=exec_record.project_id,
         test_case_id=exec_record.test_case_id,
@@ -262,6 +263,7 @@ def get_execution(project_id: str, execution_id: str, db: Session = Depends(get_
             detail={"code": "EXECUTION_NOT_FOUND", "message": f"Execution {execution_id} not found"},
         )
     return ExecutionResponse(
+        id=ex.id,
         execution_id=ex.id,
         project_id=ex.project_id,
         test_case_id=ex.test_case_id,

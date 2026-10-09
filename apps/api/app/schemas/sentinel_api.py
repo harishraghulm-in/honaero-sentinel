@@ -1,6 +1,6 @@
 from typing import List, Dict, Any, Optional
 from datetime import datetime
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from apps.api.app.domain.enums import (
     DependencyMode,
@@ -187,14 +187,27 @@ class ExecutionCreate(BaseModel):
 
 
 class ExecutionResponse(BaseModel):
-    execution_id: str
+    id: Optional[str] = None
+    execution_id: Optional[str] = None
     project_id: str
-    test_case_id: Optional[str]
+    test_case_id: Optional[str] = None
     status: ExecutionStatus
-    exit_code: Optional[int]
-    duration_ms: Optional[float]
+    exit_code: Optional[int] = None
+    duration_ms: Optional[float] = None
     results_summary: Dict[str, Any]
     created_at: datetime
+
+    @model_validator(mode="after")
+    def sync_id_and_execution_id(self) -> "ExecutionResponse":
+        if not self.id and self.execution_id:
+            self.id = self.execution_id
+        elif not self.execution_id and self.id:
+            self.execution_id = self.id
+        elif not self.id and not self.execution_id:
+            raise ValueError("Either id or execution_id must be provided")
+        elif self.id != self.execution_id:
+            self.id = self.execution_id
+        return self
 
 
 # --- Coverage, MCDC, Traceability, Evidence ---
