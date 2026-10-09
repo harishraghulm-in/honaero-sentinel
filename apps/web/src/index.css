@@ -1,15 +1,94 @@
 @import "tailwindcss";
 
 @theme {
-  --color-slate-900: #0f172a;
-  --color-slate-800: #1e293b;
-  --color-slate-700: #334155;
-  --color-cyan-500: #06b6d4;
-  --color-cyan-400: #22d3ee;
+  --color-ide-bg: #10151C;
+  --color-ide-activity: #0D1219;
+  --color-ide-sidebar: #151B23;
+  --color-ide-editor: #10151C;
+  --color-ide-panel: #151B23;
+  --color-ide-elevated: #222C38;
+  --color-ide-border: #35414E;
+
+  --color-ide-text-primary: #E7ECF1;
+  --color-ide-text-secondary: #A2ADBA;
+
+  --color-ide-accent: #55B8C7;
+  --color-ide-action: #6596D8;
+  --color-ide-success: #65B889;
+  --color-ide-warning: #D8A85C;
+  --color-ide-error: #E47777;
+
+  /* Font overrides */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
 }
 
 body {
-  background-color: var(--color-slate-900);
-  color: #f8fafc;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  background-color: var(--color-ide-bg);
+  color: var(--color-ide-text-primary);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow: hidden;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+code, pre, .font-mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+.highlight-scan-line {
+  background-color: rgba(85, 184, 199, 0.15);
+}
+
+.diagnostic-marker {
+  text-decoration: underline wavy var(--color-ide-error);
+  background-color: rgba(228, 119, 119, 0.15);
+}
+
+/* Custom Scrollbar for IDE feel */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-ide-bg);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-ide-border);
+  border: 2px solid var(--color-ide-bg);
+  border-radius: 5px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-ide-text-secondary);
+}
+
+/* Resizer handle */
+.resize-handle-y {
+  height: 4px;
+  cursor: row-resize;
+  background-color: var(--color-ide-border);
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.resize-handle-y:hover, .resize-handle-y:active {
+  opacity: 1;
+  background-color: var(--color-ide-accent);
 }
