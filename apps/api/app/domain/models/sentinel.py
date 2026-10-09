@@ -44,8 +44,11 @@ class Project(Base):
     user_hooks: Mapped[List["UserHook"]] = relationship("UserHook", back_populates="project", cascade="all, delete-orphan")
     test_suites: Mapped[List["TestSuite"]] = relationship("TestSuite", back_populates="project", cascade="all, delete-orphan")
     test_cases: Mapped[List["TestCase"]] = relationship("TestCase", back_populates="project", cascade="all, delete-orphan")
+    candidate_test_cases: Mapped[List["CandidateTestCase"]] = relationship("CandidateTestCase", back_populates="project", cascade="all, delete-orphan")
     executions: Mapped[List["Execution"]] = relationship("Execution", back_populates="project", cascade="all, delete-orphan")
     evidence_records: Mapped[List["EvidenceRecord"]] = relationship("EvidenceRecord", back_populates="project", cascade="all, delete-orphan")
+    requirement_documents: Mapped[List["RequirementDocument"]] = relationship("RequirementDocument", back_populates="project", cascade="all, delete-orphan")
+    traceability_links: Mapped[List["TraceabilityLink"]] = relationship("TraceabilityLink", back_populates="project", cascade="all, delete-orphan")
 
 
 class SourceFile(Base):
@@ -80,19 +83,72 @@ class BuildConfiguration(Base):
     project: Mapped["Project"] = relationship("Project", back_populates="build_configurations")
 
 
+class RequirementDocument(Base):
+    __tablename__ = "requirement_documents"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    project_id: Mapped[str] = mapped_column(String(36), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    file_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    checksum_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    revision: Mapped[str] = mapped_column(String(50), default="1.0")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=get_utc_now)
+
+    project: Mapped["Project"] = relationship("Project", back_populates="requirement_documents")
+    requirements: Mapped[List["Requirement"]] = relationship("Requirement", back_populates="document", cascade="all, delete-orphan")
+
+
 class Requirement(Base):
     __tablename__ = "requirements"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
     project_id: Mapped[str] = mapped_column(String(36), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    document_id: Mapped[Optional[str]] = mapped_column(String(36), ForeignKey("requirement_documents.id", ondelete="SET NULL"), nullable=True)
     identifier: Mapped[str] = mapped_column(String(100), nullable=False)  # e.g., HLR-001
     title: Mapped[str] = mapped_column(String(255), nullable=False)
-    description: Mapped[Text] = mapped_column(Text, nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
     req_type: Mapped[RequirementType] = mapped_column(SQLEnum(RequirementType), default=RequirementType.HLR)
+    section: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    page_or_line: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    acceptance_criteria: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    verification_method: Mapped[Optional[str]] = mapped_column(String(50), default="TEST")
+    ambiguity_status: Mapped[str] = mapped_column(String(50), default="CLEAR")
+    ambiguity_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    review_status: Mapped[str] = mapped_column(String(50), default="DRAFT")
+    revision: Mapped[str] = mapped_column(String(50), default="1.0")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=get_utc_now)
 
     project: Mapped["Project"] = relationship("Project", back_populates="requirements")
+    document: Mapped[Optional["RequirementDocument"]] = relationship("RequirementDocument", back_populates="requirements")
     test_cases: Mapped[List["TestCase"]] = relationship("TestCase", back_populates="requirement")
+    candidate_test_cases: Mapped[List["CandidateTestCase"]] = relationship("CandidateTestCase", back_populates="requirement", cascade="all, delete-orphan")
+
+
+class CandidateTestCase(Base):
+    __tablename__ = "candidate_test_cases"
+    __test__ = False
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    project_id: Mapped[str] = mapped_column(String(36), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    requirement_id: Mapped[str] = mapped_column(String(36), ForeignKey("requirements.id", ondelete="CASCADE"), nullable=False)
+    target_function_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    case_category: Mapped[str] = mapped_column(String(50), default="NORMAL")
+    rationale: Mapped[str] = mapped_column(Text, nullable=False)
+    preconditions: Mapped[Dict[str, Any]] = mapped_column(JSON, default=dict)
+    input_vectors: Mapped[List[Dict[str, Any]]] = mapped_column(JSON, default=list)
+    expected_outputs: Mapped[Dict[str, Any]] = mapped_column(JSON, default=dict)
+    is_expected_result_uncertain: Mapped[bool] = mapped_column(Boolean, default=False)
+    uncertainty_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    provenance: Mapped[str] = mapped_column(String(100), default="deterministic_boundary_generator")
+    approval_status: Mapped[str] = mapped_column(String(50), default="PENDING_REVIEW")
+    approved_test_case_id: Mapped[Optional[str]] = mapped_column(String(36), ForeignKey("test_cases.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=get_utc_now)
+
+    project: Mapped["Project"] = relationship("Project", back_populates="candidate_test_cases")
+    requirement: Mapped["Requirement"] = relationship("Requirement", back_populates="candidate_test_cases")
+    approved_test_case: Mapped[Optional["TestCase"]] = relationship("TestCase")
 
 
 class FunctionModel(Base):
@@ -293,7 +349,13 @@ class TraceabilityLink(Base):
     test_case_id: Mapped[Optional[str]] = mapped_column(String(36), ForeignKey("test_cases.id", ondelete="SET NULL"), nullable=True)
     execution_id: Mapped[Optional[str]] = mapped_column(String(36), ForeignKey("executions.id", ondelete="SET NULL"), nullable=True)
     evidence_id: Mapped[Optional[str]] = mapped_column(String(36), ForeignKey("evidence_records.id", ondelete="SET NULL"), nullable=True)
+    status: Mapped[str] = mapped_column(String(50), default="SUGGESTED")
+    confidence_score: Mapped[float] = mapped_column(Float, default=1.0)
+    rationale: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    source_location: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=get_utc_now)
+
+    project: Mapped["Project"] = relationship("Project", back_populates="traceability_links")
 
 
 class EvidenceRecord(Base):

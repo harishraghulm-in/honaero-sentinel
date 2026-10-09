@@ -10,6 +10,7 @@ from apps.api.app.api.routes import (
     executions,
     traceability,
     evidence,
+    requirements,
 )
 
 # Root probes
@@ -20,6 +21,7 @@ api_v1_router = APIRouter()
 
 api_v1_router.include_router(projects.router)
 api_v1_router.include_router(sources.router)
+api_v1_router.include_router(requirements.router)
 api_v1_router.include_router(analysis.router)
 api_v1_router.include_router(scope.router)
 api_v1_router.include_router(stubs.router)
@@ -27,4 +29,5 @@ api_v1_router.include_router(tests.router)
 api_v1_router.include_router(executions.router)
 api_v1_router.include_router(traceability.router)
 api_v1_router.include_router(evidence.router)
+api_v1_router.include_router(evidence.project_evidence_router)
 

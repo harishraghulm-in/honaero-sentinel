@@ -54,8 +54,19 @@ def set_project_scope(project_id: str, payload: ScopeSetRequest, db: Session = D
     )
 
 
+@router.put("", response_model=ScopeResponse)
+def update_project_scope(project_id: str, payload: ScopeSetRequest, db: Session = Depends(get_db)):
+    return set_project_scope(project_id=project_id, payload=payload, db=db)
+
+
 @router.get("", response_model=ScopeResponse)
 def get_project_scope(project_id: str, db: Session = Depends(get_db)):
+    project = db.query(Project).filter_by(id=project_id).first()
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "PROJECT_NOT_FOUND", "message": f"Project {project_id} does not exist"},
+        )
     target_fn = db.query(FunctionModel).filter_by(project_id=project_id, is_target_under_test=True).first()
     target_src = db.query(SourceFile).filter_by(project_id=project_id, is_target=True).first()
     env_sources = [
@@ -67,5 +78,6 @@ def get_project_scope(project_id: str, db: Session = Depends(get_db)):
         target_function_name=target_fn.name if target_fn else None,
         target_source_filename=target_src.filename if target_src else None,
         environment_sources=env_sources,
+        selected_functions=[target_fn.name] if target_fn else [],
     )
 

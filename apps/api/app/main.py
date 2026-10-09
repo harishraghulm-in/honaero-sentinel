@@ -16,11 +16,51 @@ setup_logging(settings.LOG_LEVEL, settings.LOG_FORMAT)
 logger = get_logger("sentinel.main")
 
 
+from sqlalchemy import inspect, text
+
+
+def sync_sqlite_schema(db_engine):
+    """
+    Safely synchronizes the SQLite database schema by adding any missing columns
+    defined on SQLAlchemy models to existing tables without data loss.
+    """
+    if db_engine.dialect.name != "sqlite":
+        return
+    with db_engine.connect() as conn:
+        inspector = inspect(db_engine)
+        for table_name in Base.metadata.tables.keys():
+            if not inspector.has_table(table_name):
+                continue
+            existing_cols = {c["name"] for c in inspector.get_columns(table_name)}
+            table = Base.metadata.tables[table_name]
+            for col in table.columns:
+                if col.name not in existing_cols:
+                    col_type = col.type.compile(db_engine.dialect)
+                    default_clause = ""
+                    if col.server_default is not None and hasattr(col.server_default, "arg"):
+                        default_clause = f" DEFAULT {col.server_default.arg.text}"
+                    elif col.default is not None and getattr(col.default, "is_scalar", False):
+                        val = col.default.arg
+                        if hasattr(val, "value"):
+                            val = val.value
+                        if isinstance(val, bool):
+                            default_clause = f" DEFAULT {1 if val else 0}"
+                        elif isinstance(val, (int, float)):
+                            default_clause = f" DEFAULT {val}"
+                        elif isinstance(val, str):
+                            escaped = val.replace("'", "''")
+                            default_clause = f" DEFAULT '{escaped}'"
+                    conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {col.name} {col_type}{default_clause}"))
+                    logger.info("Synchronized SQLite column: %s.%s (%s%s)", table_name, col.name, col_type, default_clause)
+        conn.commit()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Initializing HonAero Sentinel Verification Studio Backend...")
     # Initialize base tables if using local development
     Base.metadata.create_all(bind=engine)
+    sync_sqlite_schema(engine)
     logger.info("Database schemas verified.")
     yield
     logger.info("HonAero Sentinel Backend shutting down.")

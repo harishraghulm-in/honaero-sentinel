@@ -30,11 +30,19 @@ class LocalProcessExecutionEngine(IExecutionEngine):
 
         # 1. Write source files
         source_filenames = []
+        include_dirs = ["."]
         for fname, content in req.source_files.items():
             fpath = workspace_dir / fname
             fpath.parent.mkdir(parents=True, exist_ok=True)
             fpath.write_text(content, encoding="utf-8")
-            source_filenames.append(fname)
+            ext = fpath.suffix.lower()
+            if ext in [".c", ".cpp", ".cc", ".cxx"]:
+                source_filenames.append(fname)
+            elif ext in [".h", ".hpp", ".hh", ".hxx"]:
+                # Mirror header into workspace root so -I . resolves both bare and subpath includes cleanly
+                root_header = workspace_dir / fpath.name
+                if not root_header.exists():
+                    root_header.write_text(content, encoding="utf-8")
 
         # 2. Write stubs if provided
         if req.stub_header_content and req.stub_source_content:
@@ -48,19 +56,18 @@ class LocalProcessExecutionEngine(IExecutionEngine):
         source_filenames.append(harness_filename)
 
         # 4. Compile with GCC
-        # On Windows, compile as a shared library to safely execute in an isolated runner worker
         is_windows = os.name == "nt"
-        output_name = "harness.dll" if is_windows else "harness_bin"
+        output_name = "harness.exe" if is_windows else "harness_bin"
         compiler_flags = list(req.compiler_flags)
         if is_windows:
-            compiler_flags.extend(["-shared", "-static-libgcc"])
+            compiler_flags.extend(["-static-libgcc"])
 
         comp_req = CompilationRequest(
             workspace_dir=workspace_dir,
             source_files=source_filenames,
             output_binary=output_name,
             compiler_flags=compiler_flags,
-            include_dirs=["."],
+            include_dirs=include_dirs,
         )
         comp_result = self.compiler.compile(comp_req)
 
@@ -99,33 +106,7 @@ class LocalProcessExecutionEngine(IExecutionEngine):
             env = os.environ.copy()
             env["PATH"] = f"{gcc_parent};{env.get('PATH', '')}"
 
-            if is_windows:
-                runner_script = workspace_dir / "sentinel_runner.py"
-                runner_content = f"""import sys, os, time, ctypes
-gcc_parent = r"{gcc_parent}"
-if hasattr(os, "add_dll_directory"):
-    try:
-        os.add_dll_directory(gcc_parent)
-    except Exception:
-        pass
-dll_path = os.path.abspath(r"{bin_path.name}")
-last_err = None
-for _ in range(5):
-    try:
-        dll = ctypes.CDLL(dll_path)
-        fn = getattr(dll, "sentinel_execute_harness")
-        code = fn()
-        sys.exit(code)
-    except Exception as e:
-        last_err = e
-        time.sleep(0.3)
-sys.stderr.write(f"Isolated worker error: {{str(last_err)}}\\n")
-sys.exit(1)
-"""
-                runner_script.write_text(runner_content, encoding="utf-8")
-                cmd = [sys.executable, "sentinel_runner.py"]
-            else:
-                cmd = [str(bin_path)]
+            cmd = [str(bin_path)]
 
             proc = subprocess.run(
                 cmd,
