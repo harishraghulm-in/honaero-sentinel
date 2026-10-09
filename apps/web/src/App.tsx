@@ -15,7 +15,24 @@ import { getCoverage } from './api/coverage';
 import { getMcdc } from './api/mcdc';
 import { getEvidence } from './api/evidence';
 import { getCompilerConfig, updateCompilerConfig, type CompilerConfig } from './api/config';
-import { getAvailableModels, extractRequirements, suggestFaultInjections, explainFailure, generateAIReport } from './api/ai';
+import {
+  getAvailableModels,
+  getAIStatus,
+  setPreferredModel,
+  extractRequirements,
+  approveRequirement,
+  generateTestProposals,
+  approveTestProposal,
+  generateScenarios,
+  suggestFaultInjections,
+  explainFailure,
+  recommendCoverageGaps,
+  generateAdaptiveRetest,
+  optimizeTestSuite,
+  suggestTraceability,
+  recommendEnvironment,
+  generateAIReport,
+} from './api/ai';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -49,6 +66,8 @@ export default function App() {
   const [aiPromptType, setAiPromptType] = useState<string>('requirements');
   const [aiOutput, setAiOutput] = useState<any>(null);
   const [aiLoading, setAiLoading] = useState<boolean>(false);
+  const [selectedAiModel, setSelectedAiModel] = useState<string>('meta/llama-3.3-70b-instruct');
+  const [aiActionMessage, setAiActionMessage] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   // Config modal state
@@ -66,6 +85,7 @@ export default function App() {
   const { data: projects, refetch: refetchProjects } = useQuery({ queryKey: ['projects'], queryFn: () => getProjects(), retry: false });
   const { data: sources, isLoading: sourcesLoading, refetch: refetchSources } = useQuery({ queryKey: ['sources', projectId], queryFn: () => getSources(projectId!), enabled: !!projectId, retry: false });
   const { data: aiModels } = useQuery({ queryKey: ['aiModels'], queryFn: () => getAvailableModels(), retry: false });
+  const { data: aiStatus, refetch: refetchAiStatus } = useQuery({ queryKey: ['aiStatus'], queryFn: () => getAIStatus(), retry: false });
 
   const createProjectMutation = useMutation({
     mutationFn: (name: string) => createProject({ name }),
@@ -248,24 +268,83 @@ export default function App() {
     if (!projectId) return;
     setAiLoading(true);
     setAiOutput(null);
+    setAiActionMessage('');
     try {
+      let res: any = null;
       if (aiPromptType === 'requirements') {
-        const res = await extractRequirements(projectId, selectedSourceId || '');
-        setAiOutput(res);
+        res = await extractRequirements(projectId, selectedSourceId || undefined);
+      } else if (aiPromptType === 'tests') {
+        res = await generateTestProposals(projectId, '');
+      } else if (aiPromptType === 'scenarios') {
+        res = await generateScenarios(projectId, '');
       } else if (aiPromptType === 'faults') {
-        const res = await suggestFaultInjections(projectId, '');
-        setAiOutput(res);
+        res = await suggestFaultInjections(projectId, '');
       } else if (aiPromptType === 'explain') {
-        const res = await explainFailure(projectId, executionId || '');
-        setAiOutput(res);
+        res = await explainFailure(projectId, executionId || '');
+      } else if (aiPromptType === 'coverage-gaps') {
+        res = await recommendCoverageGaps(projectId, executionId || undefined);
+      } else if (aiPromptType === 'adaptive-retest') {
+        res = await generateAdaptiveRetest(projectId, executionId || undefined);
+      } else if (aiPromptType === 'optimize') {
+        res = await optimizeTestSuite(projectId);
+      } else if (aiPromptType === 'traceability') {
+        res = await suggestTraceability(projectId);
+      } else if (aiPromptType === 'environment') {
+        res = await recommendEnvironment(projectId);
       } else if (aiPromptType === 'report') {
-        const res = await generateAIReport(projectId);
-        setAiOutput(res);
+        res = await generateAIReport(projectId);
       }
+      setAiOutput(res);
     } catch (err: any) {
       setAiOutput({ content: `Error: ${err.message}` });
     } finally {
       setAiLoading(false);
+    }
+  };
+
+  const handleApproveRequirement = async (req: any) => {
+    if (!projectId) return;
+    try {
+      await approveRequirement(projectId, {
+        proposalId: req.proposalId || req.id,
+        identifier: req.identifier,
+        title: req.title || req.identifier,
+        description: req.description,
+        section: req.section,
+        acceptanceCriteria: req.expectedBehavior,
+      });
+      setAiActionMessage(`Requirement ${req.identifier} approved and saved into project.`);
+    } catch (err: any) {
+      setAiActionMessage(`Failed to approve requirement: ${err.message}`);
+    }
+  };
+
+  const handleApproveTestProposal = async (tc: any) => {
+    if (!projectId) return;
+    try {
+      await approveTestProposal(projectId, {
+        proposalId: tc.proposalId || tc.id,
+        name: tc.name,
+        inputs: tc.inputs || {},
+        expectedOutputs: tc.expectedOutputs || {},
+        targetFunctionId: tc.targetFunctionId,
+        testSuiteId: testSuites && testSuites.length > 0 ? testSuites[0].id : undefined,
+      });
+      setAiActionMessage(`Test case "${tc.name}" promoted to executable test suite.`);
+      refetchTestCases();
+    } catch (err: any) {
+      setAiActionMessage(`Failed to promote test proposal: ${err.message}`);
+    }
+  };
+
+  const handleSelectModel = async (modelId: string) => {
+    setSelectedAiModel(modelId);
+    if (projectId) {
+      try {
+        await setPreferredModel(projectId, modelId);
+      } catch (e) {
+        // ignore
+      }
     }
   };
 
@@ -1099,30 +1178,65 @@ export default function App() {
       {/* AI ASSISTANT MODAL */}
       {showAiModal && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-          <div className="bg-ide-panel border border-ide-border rounded-lg max-w-xl w-full p-4 space-y-4 shadow-xl">
-            <div className="flex justify-between items-center border-b border-ide-border pb-2">
-              <span className="font-semibold text-sm flex items-center gap-2">
-                <Bot size={16} className="text-ide-accent" /> AI Assistant (NVIDIA NIM)
-              </span>
-              <button onClick={() => setShowAiModal(false)} className="text-ide-text-secondary hover:text-ide-text-primary">
-                <X size={16} />
-              </button>
+          <div className="bg-ide-panel border border-ide-border rounded-lg max-w-3xl w-full p-5 space-y-4 shadow-2xl max-h-[90vh] flex flex-col">
+            <div className="flex justify-between items-center border-b border-ide-border pb-3 shrink-0">
+              <div className="flex items-center gap-3">
+                <span className="font-semibold text-sm flex items-center gap-2">
+                  <Bot size={18} className="text-ide-accent" /> AI Assistant Studio (NVIDIA NIM)
+                </span>
+                <span
+                  className={`text-[10px] px-2 py-0.5 rounded-full font-medium border ${
+                    aiStatus?.isConfigured
+                      ? 'bg-emerald-950/40 text-emerald-300 border-emerald-700'
+                      : 'bg-amber-950/40 text-amber-300 border-amber-700'
+                  }`}
+                >
+                  {aiStatus?.isConfigured ? 'NVIDIA NIM: Connected' : 'NVIDIA NIM: Deterministic Fallback'}
+                </span>
+              </div>
+              <div className="flex items-center gap-3">
+                <select
+                  value={selectedAiModel}
+                  onChange={(e) => handleSelectModel(e.target.value)}
+                  className="bg-ide-bg border border-ide-border rounded px-2 py-1 text-xs outline-none text-ide-text-primary"
+                >
+                  {aiModels?.map((m: any) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name}
+                    </option>
+                  )) || (
+                    <option value="meta/llama-3.3-70b-instruct">Meta Llama 3.3 70B</option>
+                  )}
+                </select>
+                <button onClick={() => setShowAiModal(false)} className="text-ide-text-secondary hover:text-ide-text-primary">
+                  <X size={18} />
+                </button>
+              </div>
             </div>
-            <div className="space-y-3 text-xs">
-              <div className="flex gap-2">
+
+            <div className="overflow-x-auto pb-1 shrink-0">
+              <div className="flex gap-1.5 text-xs whitespace-nowrap">
                 {[
                   { id: 'requirements', label: 'Requirements' },
+                  { id: 'tests', label: 'Test Proposals' },
+                  { id: 'scenarios', label: 'Flight Scenarios' },
                   { id: 'faults', label: 'Fault Injection' },
-                  { id: 'explain', label: 'Explain Run' },
-                  { id: 'report', label: 'DO-178C Report' },
+                  { id: 'explain', label: 'Diagnostics' },
+                  { id: 'coverage-gaps', label: 'Coverage Gaps' },
+                  { id: 'adaptive-retest', label: 'Adaptive Retest' },
+                  { id: 'optimize', label: 'Suite Optimizer' },
+                  { id: 'traceability', label: 'Traceability' },
+                  { id: 'environment', label: 'Toolchain' },
+                  { id: 'report', label: 'Report Draft' },
                 ].map((t) => (
                   <button
                     key={t.id}
                     onClick={() => {
                       setAiPromptType(t.id);
                       setAiOutput(null);
+                      setAiActionMessage('');
                     }}
-                    className={`px-3 py-1.5 rounded font-medium ${
+                    className={`px-2.5 py-1 rounded text-[11px] font-medium transition-colors ${
                       aiPromptType === t.id ? 'bg-ide-accent text-ide-bg' : 'bg-ide-border text-ide-text-primary hover:bg-ide-elevated'
                     }`}
                   >
@@ -1130,30 +1244,175 @@ export default function App() {
                   </button>
                 ))}
               </div>
+            </div>
 
-              <div className="p-2 bg-amber-950/20 border border-amber-900/40 rounded text-[11px] text-amber-200">
-                <strong>DO-178C Deterministic Guardrail:</strong> AI suggestions are strictly advisory proposals. Ground-truth verification is only established through deterministic compiler and test execution.
+            <div className="p-2.5 bg-amber-950/20 border border-amber-900/40 rounded text-[11px] text-amber-200 shrink-0">
+              <strong>DO-178C Deterministic Guardrail:</strong> AI output represents advisory candidate proposals. Ground truth verification is strictly established through deterministic compilation, test harness execution, and GCOV/MC/DC measurement.
+            </div>
+
+            {aiActionMessage && (
+              <div className="p-2 bg-emerald-950/30 border border-emerald-800/50 rounded text-xs text-emerald-300 flex items-center gap-2 shrink-0">
+                <Check size={14} /> {aiActionMessage}
               </div>
+            )}
 
-              <button
-                onClick={handleTriggerAi}
-                disabled={aiLoading}
-                className="w-full bg-ide-action hover:bg-blue-500 text-white p-2 rounded font-medium disabled:opacity-50"
-              >
-                {aiLoading ? 'Querying Model...' : `Generate ${aiPromptType.toUpperCase()} Proposal`}
-              </button>
+            <button
+              onClick={handleTriggerAi}
+              disabled={aiLoading || !projectId}
+              className="w-full bg-ide-action hover:bg-blue-500 text-white p-2 rounded text-xs font-medium disabled:opacity-50 shrink-0"
+            >
+              {aiLoading ? 'Querying Model / Synthesizing Proposals...' : `Generate ${aiPromptType.toUpperCase()} Proposal`}
+            </button>
 
-              {aiOutput && (
-                <div className="p-3 bg-ide-bg border border-ide-border rounded space-y-2 max-h-60 overflow-y-auto">
-                  <div className="flex justify-between text-[11px] text-ide-text-secondary">
-                    <span>Model: {aiOutput.modelUsed || 'meta/llama-3.3-70b-instruct'}</span>
-                    {aiOutput.confidenceScore && <span>Confidence: {Math.round(aiOutput.confidenceScore * 100)}%</span>}
+            <div className="flex-1 overflow-y-auto min-h-0 space-y-3 pr-1">
+              {aiOutput ? (
+                <div className="space-y-3">
+                  <div className="flex justify-between text-[11px] text-ide-text-secondary pb-1 border-b border-ide-border">
+                    <span>Model: {aiOutput.modelUsed || selectedAiModel} ({aiOutput.isLiveCall ? 'Live NIM Call' : 'Deterministic Provenance Fallback'})</span>
+                    {aiOutput.confidenceScore && <span>Confidence Score: {Math.round(aiOutput.confidenceScore * 100)}%</span>}
                   </div>
-                  <pre className="font-mono text-[11px] text-ide-text-primary whitespace-pre-wrap">
-                    {typeof aiOutput.content === 'string'
-                      ? aiOutput.content
-                      : JSON.stringify(aiOutput.content, null, 2)}
-                  </pre>
+
+                  {/* Requirements List */}
+                  {aiPromptType === 'requirements' && Array.isArray(aiOutput.content) && (
+                    <div className="space-y-2">
+                      {aiOutput.content.map((req: any, idx: number) => (
+                        <div key={idx} className="p-3 bg-ide-bg border border-ide-border rounded space-y-2">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <span className="font-mono font-bold text-xs text-sky-400">{req.identifier}</span>
+                              <span className="ml-2 font-semibold text-xs text-ide-text-primary">{req.title}</span>
+                            </div>
+                            <span className="text-[10px] bg-ide-elevated px-1.5 py-0.5 rounded text-ide-text-secondary border border-ide-border">
+                              {req.provenance || 'AI_INFERRED'}
+                            </span>
+                          </div>
+                          <p className="text-xs text-ide-text-secondary">{req.description}</p>
+                          {req.constraints && req.constraints.length > 0 && (
+                            <div className="text-[11px] text-amber-300 font-mono">
+                              Constraints: {req.constraints.join(', ')}
+                            </div>
+                          )}
+                          <div className="flex justify-end pt-1">
+                            <button
+                              onClick={() => handleApproveRequirement(req)}
+                              className="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-600 text-white rounded text-[11px] font-medium flex items-center gap-1"
+                            >
+                              <Check size={12} /> Approve Requirement
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Test Proposals */}
+                  {aiPromptType === 'tests' && Array.isArray(aiOutput.content) && (
+                    <div className="space-y-2">
+                      {aiOutput.content.map((tc: any, idx: number) => (
+                        <div key={idx} className="p-3 bg-ide-bg border border-ide-border rounded space-y-2">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <span className="font-mono font-semibold text-xs text-ide-accent">{tc.name}</span>
+                              <span className="ml-2 text-[10px] bg-ide-elevated px-1.5 py-0.5 rounded text-ide-text-secondary">
+                                {tc.category}
+                              </span>
+                            </div>
+                            <span className="text-[10px] text-ide-text-secondary">
+                              Oracle: {tc.hasApprovedOracle ? 'Grounded' : 'Unresolved'}
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 text-[11px] font-mono bg-ide-panel p-2 rounded">
+                            <div>Inputs: {JSON.stringify(tc.inputs)}</div>
+                            <div>Expected: {JSON.stringify(tc.expectedOutputs)}</div>
+                          </div>
+                          {tc.rationale && <p className="text-[11px] text-ide-text-secondary">{tc.rationale}</p>}
+                          <div className="flex justify-end pt-1">
+                            <button
+                              onClick={() => handleApproveTestProposal(tc)}
+                              className="px-2.5 py-1 bg-ide-action hover:bg-blue-600 text-white rounded text-[11px] font-medium flex items-center gap-1"
+                            >
+                              <PlaySquare size={12} /> Promote to Test Suite
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Scenarios */}
+                  {aiPromptType === 'scenarios' && Array.isArray(aiOutput.content) && (
+                    <div className="space-y-3">
+                      {aiOutput.content.map((sc: any, idx: number) => (
+                        <div key={idx} className="p-3 bg-ide-bg border border-ide-border rounded space-y-2">
+                          <div className="font-semibold text-xs text-ide-accent">{sc.scenarioName} ({sc.flightPhase})</div>
+                          <p className="text-[11px] text-ide-text-secondary">{sc.rationale}</p>
+                          <div className="space-y-1">
+                            {sc.steps?.map((st: any, sIdx: number) => (
+                              <div key={sIdx} className="text-[11px] font-mono p-1 bg-ide-panel rounded flex justify-between">
+                                <span>Step {st.stepIndex} ({st.flightPhase}): {JSON.stringify(st.inputs)}</span>
+                                <span className="text-emerald-300">{st.expectedState}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Failure Diagnostics */}
+                  {aiPromptType === 'explain' && aiOutput.content && (
+                    <div className="p-3 bg-ide-bg border border-ide-border rounded space-y-2 text-xs">
+                      <div className="font-semibold text-rose-300">Run: {aiOutput.content.executionId} (Verdict: {aiOutput.content.verdict})</div>
+                      {aiOutput.content.possibleCauses && (
+                        <div>
+                          <div className="font-semibold text-ide-text-primary mb-1">Identified Potential Causes:</div>
+                          <ul className="list-disc pl-4 space-y-0.5 text-ide-text-secondary text-[11px]">
+                            {aiOutput.content.possibleCauses.map((c: string, cIdx: number) => (
+                              <li key={cIdx}>{c}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      {aiOutput.content.suggestedRemediation && (
+                        <div>
+                          <div className="font-semibold text-emerald-300 mb-1">Suggested Remediation:</div>
+                          <ul className="list-disc pl-4 space-y-0.5 text-ide-text-secondary text-[11px]">
+                            {aiOutput.content.suggestedRemediation.map((r: string, rIdx: number) => (
+                              <li key={rIdx}>{r}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Coverage Gaps */}
+                  {aiPromptType === 'coverage-gaps' && Array.isArray(aiOutput.content) && (
+                    <div className="space-y-2">
+                      {aiOutput.content.map((gap: any, gIdx: number) => (
+                        <div key={gIdx} className="p-3 bg-ide-bg border border-ide-border rounded space-y-1 text-xs">
+                          <div className="font-semibold text-amber-300">{gap.sourceLocation}</div>
+                          <p className="text-ide-text-secondary text-[11px]">{gap.gapDescription}</p>
+                          <div className="font-mono text-[11px] p-1 bg-ide-panel rounded text-sky-300">
+                            Recommended Vector: {JSON.stringify(gap.proposedVector)} ({gap.targetedBranch})
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Default / Report / Optimization fallback */}
+                  {!['requirements', 'tests', 'scenarios', 'explain', 'coverage-gaps'].includes(aiPromptType) && (
+                    <pre className="font-mono text-[11px] text-ide-text-primary whitespace-pre-wrap p-3 bg-ide-bg border border-ide-border rounded">
+                      {typeof aiOutput.content === 'string'
+                        ? aiOutput.content
+                        : JSON.stringify(aiOutput.content, null, 2)}
+                    </pre>
+                  )}
+                </div>
+              ) : (
+                <div className="p-6 text-center text-ide-text-secondary text-xs">
+                  Select a category above and click generate to query the AI model.
                 </div>
               )}
             </div>
