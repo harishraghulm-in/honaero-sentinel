@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://honaero.sentinel/schemas/HarnessRequest.json",
+  "title": "HarnessRequest",
+  "description": "Request payload to synthesize test harness, stubs, and test vectors.",
+  "type": "object",
+  "required": ["target_source_file", "target_function", "test_vectors"],
+  "properties": {
+    "project_id": { "type": "string" },
+    "target_source_file": { "type": "string" },
+    "target_header_file": { "type": "string" },
+    "output_directory": { "type": "string" },
+    "target_function": { "type": "object" },
+    "stubs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["function_name", "mode"],
+        "properties": {
+          "function_name": { "type": "string" },
+          "mode": { "type": "string", "enum": ["REAL", "STUB"] },
+          "return_type": { "type": "string" },
+          "return_values": { "type": "array" }
+        }
+      }
+    },
+    "test_vectors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["vector_index", "inputs", "expected_outputs"],
+        "properties": {
+          "vector_index": { "type": "integer" },
+          "description": { "type": "string" },
+          "inputs": { "type": "object" },
+          "expected_outputs": { "type": "object" }
+        }
+      }
+    },
+    "hooks": {
+      "type": "object",
+      "properties": {
+        "setup_code": { "type": "string" },
+        "before_test_code": { "type": "string" },
+        "after_test_code": { "type": "string" },
+        "teardown_code": { "type": "string" }
+      }
+    }
+  }
+}

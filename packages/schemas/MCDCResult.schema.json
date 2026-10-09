@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://honaero.sentinel/schemas/MCDCResult.json",
+  "title": "MCDCResult",
+  "description": "Modified Condition/Decision Coverage analysis showing condition independence pairs and gap advisor recommendations.",
+  "type": "object",
+  "required": ["coverage_percentage", "full_mcdc_achieved", "decisions", "gap_recommendations"],
+  "properties": {
+    "execution_id": { "type": "string" },
+    "coverage_percentage": { "type": "number", "minimum": 0, "maximum": 100 },
+    "full_mcdc_achieved": { "type": "boolean" },
+    "decisions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["decision_id", "expression", "mcdc_achieved", "coverage_pct", "conditions"],
+        "properties": {
+          "decision_id": { "type": "string" },
+          "expression": { "type": "string" },
+          "line_number": { "type": "integer" },
+          "mcdc_achieved": { "type": "boolean" },
+          "coverage_pct": { "type": "number" },
+          "total_conditions": { "type": "integer" },
+          "covered_conditions": { "type": "integer" },
+          "independence_pairs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["condition_id", "true_vector_index", "false_vector_index"],
+              "properties": {
+                "condition_id": { "type": "string" },
+                "true_vector_index": { "type": "integer" },
+                "false_vector_index": { "type": "integer" },
+                "explanation": { "type": "string" }
+              }
+            }
+          },
+          "conditions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["id", "independence_proven"],
+              "properties": {
+                "id": { "type": "string" },
+                "expression": { "type": "string" },
+                "independence_proven": { "type": "boolean" },
+                "independence_pair": { "type": "string" },
+                "reason": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "gap_recommendations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["condition_id", "missing_independence_reason"],
+        "properties": {
+          "condition_id": { "type": "string" },
+          "condition_expression": { "type": "string" },
+          "missing_independence_reason": { "type": "string" },
+          "candidate_inputs": { "type": "object" },
+          "guidance": { "type": "string" }
+        }
+      }
+    }
+  }
+}

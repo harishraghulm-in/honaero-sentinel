@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://honaero.sentinel/schemas/AnalysisResult.json",
+  "title": "AnalysisResult",
+  "description": "Output schema for AST subprogram and decision analysis produced by the Verification Core SDK.",
+  "type": "object",
+  "required": ["source_file", "total_sources", "functions", "dependencies"],
+  "properties": {
+    "project_id": {
+      "type": "string",
+      "description": "Identifier of the active verification project"
+    },
+    "source_file": {
+      "type": "string",
+      "description": "Primary analyzed C/C++ source filename"
+    },
+    "total_sources": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Number of source units analyzed in translation scope"
+    },
+    "functions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "return_type", "parameters", "decisions"],
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "return_type": { "type": "string" },
+          "is_target_under_test": { "type": "boolean" },
+          "parameters": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["name", "type"],
+              "properties": {
+                "name": { "type": "string" },
+                "type": { "type": "string" },
+                "is_pointer": { "type": "boolean" },
+                "is_array": { "type": "boolean" }
+              }
+            }
+          },
+          "decisions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["id", "expression", "conditions"],
+              "properties": {
+                "id": { "type": "string" },
+                "expression": { "type": "string" },
+                "line_number": { "type": "integer" },
+                "conditions": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": ["id", "expression", "variable_references"],
+                    "properties": {
+                      "id": { "type": "string" },
+                      "expression": { "type": "string" },
+                      "variable_references": {
+                        "type": "array",
+                        "items": { "type": "string" }
+                      },
+                      "relational_operator": { "type": "string" },
+                      "left_operand": { "type": "string" },
+                      "right_operand": { "type": "string" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "classification"],
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "return_type": { "type": "string" },
+          "classification": { "type": "string", "enum": ["REAL", "STUB"] }
+        }
+      }
+    }
+  }
+}
