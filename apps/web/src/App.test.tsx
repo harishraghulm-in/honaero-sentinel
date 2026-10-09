@@ -13,6 +13,6 @@ describe('App', () => {
         <App />
       </QueryClientProvider>
     );
-    expect(screen.getByText('Source Retrieval & Upload')).toBeDefined();
+    expect(screen.getByText('HONAERO SENTINEL')).toBeDefined();
   });
 });
