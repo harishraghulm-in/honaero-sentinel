@@ -1,0 +1,15 @@
+[
+  {
+    "identifier": "HLR-001",
+    "title": "Cabin Over-Pressure Depressurization",
+    "description": "If cabin pressure exceeds 900 hPa and aircraft altitude is below 10,000 ft and secondary sensor confirms reading above 900 hPa, the controller shall actuate the outflow valve to 100% and output state 1.",
+    "req_type": "HLR"
+  },
+  {
+    "identifier": "LLR-001",
+    "title": "Nominal Cabin Valve Closure",
+    "description": "If cabin over-pressure conditions are not satisfied, the controller shall command outflow valve to 0% and return state 0.",
+    "req_type": "LLR"
+  }
+]
+

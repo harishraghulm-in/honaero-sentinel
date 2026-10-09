@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://honaero.sentinel/schemas/EvidenceRecord.json",
+  "title": "EvidenceRecord",
+  "description": "Immutable verification evidence package containing cryptographic checksums and freshness lifecycle status.",
+  "type": "object",
+  "required": [
+    "evidence_id",
+    "project_id",
+    "execution_id",
+    "target_function",
+    "source_checksum",
+    "freshness",
+    "compiler",
+    "compiler_version",
+    "build_status",
+    "execution_status",
+    "coverage",
+    "mcdc",
+    "traceability"
+  ],
+  "properties": {
+    "evidence_id": { "type": "string" },
+    "project_id": { "type": "string" },
+    "execution_id": { "type": "string" },
+    "target_function": { "type": "string" },
+    "timestamp": { "type": "string" },
+    "tool_version": { "type": "string" },
+    "source_checksum": { "type": "string" },
+    "stub_checksum": { "type": "string" },
+    "vector_checksum": { "type": "string" },
+    "configuration_checksum": { "type": "string" },
+    "freshness": { "type": "string", "enum": ["CURRENT", "STALE", "INVALIDATED"] },
+    "freshness_reason": { "type": "string" },
+    "affected_test_cases": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "compiler": { "type": "string" },
+    "compiler_version": { "type": "string" },
+    "compiler_flags": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "build_status": { "type": "string" },
+    "execution_status": { "type": "string" },
+    "exit_code": { "type": "integer" },
+    "duration_ms": { "type": "number" },
+    "coverage": { "type": "object" },
+    "mcdc": { "type": "object" },
+    "traceability": { "type": "object" },
+    "evidence_data": { "type": "object" }
+  }
+}

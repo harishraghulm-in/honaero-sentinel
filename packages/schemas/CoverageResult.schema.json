@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://honaero.sentinel/schemas/CoverageResult.json",
+  "title": "CoverageResult",
+  "description": "Statement, branch, function, and line coverage metrics parsed from GCOV/LLVM coverage artifacts.",
+  "type": "object",
+  "required": [
+    "statement_coverage_pct",
+    "branch_coverage_pct",
+    "total_lines",
+    "covered_lines",
+    "total_branches",
+    "covered_branches"
+  ],
+  "properties": {
+    "execution_id": { "type": "string" },
+    "source_file": { "type": "string" },
+    "statement_coverage_pct": { "type": "number", "minimum": 0, "maximum": 100 },
+    "branch_coverage_pct": { "type": "number", "minimum": 0, "maximum": 100 },
+    "function_coverage_pct": { "type": "number", "minimum": 0, "maximum": 100 },
+    "line_coverage_pct": { "type": "number", "minimum": 0, "maximum": 100 },
+    "total_lines": { "type": "integer", "minimum": 0 },
+    "covered_lines": { "type": "integer", "minimum": 0 },
+    "total_branches": { "type": "integer", "minimum": 0 },
+    "covered_branches": { "type": "integer", "minimum": 0 },
+    "uncovered_lines": {
+      "type": "array",
+      "items": { "type": "integer" }
+    },
+    "raw_artifact": { "type": "string" }
+  }
+}

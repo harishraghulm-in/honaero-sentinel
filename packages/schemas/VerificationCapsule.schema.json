@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://honaero.sentinel/schemas/VerificationCapsule.json",
+  "title": "VerificationCapsule",
+  "description": "Hermetic audit package containing source manifest, configurations, evidence, and tamper-evident capsule hash.",
+  "type": "object",
+  "required": [
+    "capsule_id",
+    "schema_version",
+    "project_id",
+    "source_manifest",
+    "source_contents",
+    "harness_config",
+    "evidence",
+    "capsule_hash"
+  ],
+  "properties": {
+    "capsule_id": { "type": "string" },
+    "schema_version": { "type": "string" },
+    "project_id": { "type": "string" },
+    "created_at": { "type": "string" },
+    "source_manifest": { "type": "object" },
+    "source_contents": { "type": "object" },
+    "harness_config": { "type": "object" },
+    "stubs": { "type": "array" },
+    "test_vectors": { "type": "array" },
+    "compiler_path": { "type": "string" },
+    "compiler_version": { "type": "string" },
+    "compiler_flags": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "evidence": { "type": "object" },
+    "capsule_hash": { "type": "string" }
+  }
+}

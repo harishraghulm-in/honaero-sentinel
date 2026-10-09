@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://honaero.sentinel/schemas/DependencyGraph.json",
+  "title": "DependencyGraph",
+  "description": "Dependency hierarchy and stub/real isolation map for a target unit.",
+  "type": "object",
+  "required": ["root_function", "dependencies"],
+  "properties": {
+    "root_function": { "type": "string" },
+    "dependencies": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "classification"],
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "return_type": { "type": "string" },
+          "classification": { "type": "string", "enum": ["REAL", "STUB"] },
+          "call_site_file": { "type": "string" },
+          "call_site_line": { "type": "integer" }
+        }
+      }
+    }
+  }
+}
