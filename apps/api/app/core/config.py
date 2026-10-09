@@ -1,3 +1,4 @@
+import shutil
 from functools import lru_cache
 from pathlib import Path
 from typing import Optional
@@ -25,8 +26,8 @@ class Settings(BaseSettings):
     DB_ECHO: bool = False
 
     # Toolchains
-    GCC_PATH: str = r"C:\msys64\ucrt64\bin\gcc.exe"
-    GCOV_PATH: str = r"C:\msys64\ucrt64\bin\gcov.exe"
+    GCC_PATH: str = shutil.which("gcc") or "gcc"
+    GCOV_PATH: str = shutil.which("gcov") or "gcov"
     CLANG_PATH: str = "clang"
     CMAKE_PATH: str = "cmake"
 
