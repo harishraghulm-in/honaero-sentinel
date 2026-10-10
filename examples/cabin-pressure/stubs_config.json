@@ -1,0 +1,24 @@
+[
+  {
+    "function_name": "sensor_read",
+    "mode": "STUB",
+    "return_type": "int",
+    "return_values": [950, 950, 950, 950],
+    "expected_call_count": 4,
+    "description": "Deterministic mock returning safe overpressure telemetry"
+  },
+  {
+    "function_name": "valve_actuate",
+    "mode": "STUB",
+    "return_type": "void",
+    "parameters": [
+      {
+        "name": "position_pct",
+        "type": "int"
+      }
+    ],
+    "expected_call_count": 4,
+    "description": "Mock valve actuation driver recording actuator commands"
+  }
+]
+

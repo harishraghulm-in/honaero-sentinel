@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://honaero.sentinel/schemas/TraceabilityGraph.json",
+  "title": "TraceabilityGraph",
+  "description": "Full end-to-end traceability matrix from Requirement to Execution, Coverage, and Evidence.",
+  "type": "object",
+  "required": ["project_id", "requirements", "functions", "test_cases", "links"],
+  "properties": {
+    "project_id": { "type": "string" },
+    "requirements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["identifier", "title", "req_type"],
+        "properties": {
+          "identifier": { "type": "string" },
+          "title": { "type": "string" },
+          "description": { "type": "string" },
+          "req_type": { "type": "string", "enum": ["HLR", "LLR"] }
+        }
+      }
+    },
+    "functions": { "type": "array" },
+    "test_cases": { "type": "array" },
+    "links": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["source_id", "source_type", "target_id", "target_type", "relationship"],
+        "properties": {
+          "source_id": { "type": "string" },
+          "source_type": { "type": "string" },
+          "target_id": { "type": "string" },
+          "target_type": { "type": "string" },
+          "relationship": { "type": "string" }
+        }
+      }
+    }
+  }
+}
