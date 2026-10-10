@@ -25,7 +25,8 @@ class LocalProcessExecutionEngine(IExecutionEngine):
         self.settings = get_settings()
 
     def execute(self, req: ExecutionRequest) -> ExecutionResult:
-        workspace_dir = self.settings.WORKSPACE_BASE_PATH / req.execution_id
+        settings = get_settings()
+        workspace_dir = settings.WORKSPACE_BASE_PATH / req.execution_id
         workspace_dir.mkdir(parents=True, exist_ok=True)
 
         # 1. Write source files
@@ -57,10 +58,21 @@ class LocalProcessExecutionEngine(IExecutionEngine):
 
         # 4. Compile with GCC
         is_windows = os.name == "nt"
-        output_name = "harness.exe" if is_windows else "harness_bin"
-        compiler_flags = list(req.compiler_flags)
+        output_name = f"harness_{req.execution_id[:12]}.exe" if is_windows else f"harness_{req.execution_id[:12]}"
+        compiler_flags = []
+        has_coverage = False
+        for flag in req.compiler_flags:
+            if flag in ("--coverage", "-fprofile-arcs", "-ftest-coverage"):
+                has_coverage = True
+            elif flag not in compiler_flags:
+                compiler_flags.append(flag)
+        if has_coverage:
+            compiler_flags.append("--coverage")
         if is_windows:
-            compiler_flags.extend(["-static-libgcc"])
+            if "-static-libgcc" not in compiler_flags:
+                compiler_flags.append("-static-libgcc")
+            if "-no-pie" not in compiler_flags:
+                compiler_flags.append("-no-pie")
 
         comp_req = CompilationRequest(
             workspace_dir=workspace_dir,
@@ -107,19 +119,33 @@ class LocalProcessExecutionEngine(IExecutionEngine):
             env["PATH"] = f"{gcc_parent};{env.get('PATH', '')}"
 
             cmd = [str(bin_path)]
+            if is_windows:
+                # Give Windows Defender / Code Integrity time to finish scan of newly emitted binary
+                time.sleep(0.5)
 
-            proc = subprocess.run(
-                cmd,
-                cwd=str(workspace_dir),
-                capture_output=True,
-                text=True,
-                timeout=req.timeout_seconds,
-                env=env,
-            )
+            for attempt in range(20):
+                try:
+                    proc = subprocess.run(
+                        cmd,
+                        cwd=str(workspace_dir),
+                        capture_output=True,
+                        text=True,
+                        timeout=req.timeout_seconds,
+                        env=env,
+                    )
+                    proc_exit_code = proc.returncode
+                    stdout_str = proc.stdout
+                    stderr_str = proc.stderr
+                    break
+                except OSError as e:
+                    # Windows Error 4551: ERROR_APP_DATA_NOT_FOUND or WDAC code integrity transient check
+                    # Windows Error 5: Access Denied (file lock by scanner)
+                    # Windows Error 32: Sharing violation
+                    if is_windows and getattr(e, "winerror", None) in (4551, 5, 32) and attempt < 19:
+                        time.sleep(0.8 + 0.4 * attempt)
+                        continue
+                    raise
             duration_ms = (time.perf_counter() - start_time) * 1000.0
-            proc_exit_code = proc.returncode
-            stdout_str = proc.stdout
-            stderr_str = proc.stderr
 
             # Check JSON results file
             result_json_path = workspace_dir / "sentinel_result.json"

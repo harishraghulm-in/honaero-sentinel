@@ -9,7 +9,11 @@ from apps.api.app.domain.models import SourceFile, Project
 
 
 ALLOWED_SOURCE_EXTENSIONS = {
-    ".c", ".h", ".cpp", ".hpp", ".cc", ".cxx", ".hh", ".hxx"
+    ".c", ".h", ".cpp", ".hpp", ".cc", ".cxx", ".hh", ".hxx",
+    ".cmake", ".mk"
+}
+ALLOWED_SOURCE_FILENAMES = {
+    "cmakelists.txt", "makefile", "gnumakefile"
 }
 
 MAX_ARCHIVE_SIZE_BYTES = 25 * 1024 * 1024  # 25 MB
@@ -76,9 +80,10 @@ class SourceArchiveService:
                     f"File '{raw_path}' uncompressed size {info.file_size} exceeds limit of {MAX_UNCOMPRESSED_FILE_SIZE // (1024*1024)}MB."
                 )
 
-            # 3. Check file extension
+            # 3. Check file extension or filename
+            base_lower = os.path.basename(raw_path).lower()
             _, ext = os.path.splitext(raw_path.lower())
-            if ext not in ALLOWED_SOURCE_EXTENSIONS:
+            if ext not in ALLOWED_SOURCE_EXTENSIONS and base_lower not in ALLOWED_SOURCE_FILENAMES:
                 # Safely skip documentation, binaries, git files, etc.
                 skipped_count += 1
                 continue

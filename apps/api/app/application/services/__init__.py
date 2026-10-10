@@ -41,6 +41,12 @@ from apps.api.app.application.services.requirement_service import (
 from apps.api.app.application.services.source_archive_service import (
     SourceArchiveService,
 )
+from apps.api.app.application.services.prioritization_service import (
+    PrioritizationService,
+)
+from apps.api.app.application.services.report_service import (
+    ReportService,
+)
 
 __all__ = [
     "StubGeneratorService",
@@ -70,5 +76,7 @@ __all__ = [
     "ExtractedRequirementDTO",
     "CandidateCaseDTO",
     "SourceArchiveService",
+    "PrioritizationService",
+    "ReportService",
 ]
 

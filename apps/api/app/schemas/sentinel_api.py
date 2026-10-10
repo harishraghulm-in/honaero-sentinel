@@ -35,6 +35,26 @@ class SourceCreate(BaseModel):
     is_environment: bool = False
 
 
+class SourceBatchItem(BaseModel):
+    filename: str
+    filepath: str
+    content: str
+    is_target: bool = False
+    is_environment: bool = False
+
+
+class SourceBatchUploadRequest(BaseModel):
+    files: List[SourceBatchItem] = Field(..., description="List of source files to upload in batch")
+    overwrite: bool = True
+
+
+class SourceBatchUploadResponse(BaseModel):
+    total_received: int
+    imported_count: int
+    skipped_count: int
+    files: List["SourceResponse"] = Field(default_factory=list)
+
+
 class SourceResponse(BaseModel):
     id: str
     project_id: str
@@ -648,3 +668,159 @@ class AIResponseDTO(BaseModel):
     content: Any
     confidenceScore: Optional[float] = 0.95
     disclaimer: str = "DO-178C Notice: AI output is an advisory proposal and does not constitute authoritative verification evidence."
+
+
+# --- File Tree & Source Content ---
+class FileTreeNode(BaseModel):
+    id: Optional[str] = None
+    name: str
+    path: str
+    type: str  # "file" or "directory"
+    extension: Optional[str] = None
+    language: Optional[str] = None
+    size_bytes: int = 0
+    lines_of_code: int = 0
+    functions_count: int = 0
+    functions: List[str] = Field(default_factory=list)
+    complexity_score: Optional[int] = None
+    content: Optional[str] = None
+    children: Optional[List["FileTreeNode"]] = None
+
+
+class FileTreeResponse(BaseModel):
+    project_id: str
+    total_files: int
+    total_directories: int
+    total_lines_of_code: int
+    tree: List[FileTreeNode]
+
+
+class SourceContentResponse(BaseModel):
+    id: str
+    project_id: str
+    filename: str
+    filepath: str
+    content: str
+    lines_of_code: int
+    size_bytes: int
+    checksum_sha256: str
+    is_target: bool
+    is_environment: bool
+
+
+# --- Test Prioritization ---
+class PrioritizationFactorDTO(BaseModel):
+    factor_name: str
+    weight: float
+    contribution: float
+    description: str
+
+
+class PrioritizedItemDTO(BaseModel):
+    item_id: str
+    target_type: str  # "test_case" or "function"
+    name: str
+    target_function_name: Optional[str] = None
+    source_file: Optional[str] = None
+    safety_criticality: str  # "LEVEL_A", "LEVEL_B", "LEVEL_C", "LEVEL_D", "UNSPECIFIED"
+    priority_rank: int
+    priority_score: float  # 0.0 to 100.0
+    rationale: str
+    factors: List[PrioritizationFactorDTO] = Field(default_factory=list)
+    is_overridden: bool = False
+    override_reason: Optional[str] = None
+    last_verdict: Optional[str] = None
+    uncovered_decisions_count: int = 0
+
+
+class PrioritizationResponse(BaseModel):
+    project_id: str
+    generated_at: datetime
+    total_ranked_items: int
+    priorities: List[PrioritizedItemDTO]
+
+
+class PrioritizationOverrideRequest(BaseModel):
+    target_id: str
+    manual_priority: str  # "HIGH", "MEDIUM", "LOW"
+    manual_score: Optional[float] = None
+    override_reason: str
+
+
+class PrioritizationOverrideResponse(BaseModel):
+    id: str
+    project_id: str
+    target_id: str
+    manual_priority: str
+    manual_score: Optional[float] = None
+    override_reason: str
+    created_at: datetime
+    updated_at: datetime
+
+
+# --- Project Verification Report ---
+class SourceMetricsDTO(BaseModel):
+    total_sources: int
+    total_lines_of_code: int
+    total_functions: int
+    total_decisions: int
+
+
+class RequirementMetricsDTO(BaseModel):
+    total_requirements: int
+    high_level_count: int
+    low_level_count: int
+    derived_count: int
+    verified_count: int
+    verification_percentage: float
+
+
+class TestMetricsDTO(BaseModel):
+    total_suites: int
+    total_test_cases: int
+    total_vectors: int
+
+
+class ExecutionMetricsDTO(BaseModel):
+    total_executions: int
+    passed_executions: int
+    failed_executions: int
+    error_executions: int
+    timeout_executions: int
+    pass_rate_percentage: float
+    build_failures: int
+    assertion_failures: int
+    timeouts: int
+    crashes_or_errors: int
+
+
+class CoverageSummaryDTO(BaseModel):
+    available: bool
+    statement_coverage_pct: float
+    branch_coverage_pct: float
+    function_coverage_pct: float
+    mcdc_coverage_pct: float
+    freshness: str
+
+
+class TraceabilitySummaryDTO(BaseModel):
+    total_links: int
+    requirement_coverage_pct: float
+    unlinked_requirements: List[str]
+    untested_functions: List[str]
+
+
+class ProjectReportResponse(BaseModel):
+    project_id: str
+    project_name: str
+    generated_at: datetime
+    compliance_standard: str
+    sources: SourceMetricsDTO
+    requirements: RequirementMetricsDTO
+    tests: TestMetricsDTO
+    executions: ExecutionMetricsDTO
+    coverage: CoverageSummaryDTO
+    traceability: TraceabilitySummaryDTO
+    audit_findings: List[str]
+    limitations_and_disclaimers: List[str]
+

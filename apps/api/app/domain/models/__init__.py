@@ -18,6 +18,7 @@ from apps.api.app.domain.models.sentinel import (
     MCDCResult,
     TraceabilityLink,
     EvidenceRecord,
+    PrioritizationOverride,
 )
 
 __all__ = [
@@ -40,5 +41,6 @@ __all__ = [
     "MCDCResult",
     "TraceabilityLink",
     "EvidenceRecord",
+    "PrioritizationOverride",
 ]
 

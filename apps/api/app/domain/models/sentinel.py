@@ -49,6 +49,7 @@ class Project(Base):
     evidence_records: Mapped[List["EvidenceRecord"]] = relationship("EvidenceRecord", back_populates="project", cascade="all, delete-orphan")
     requirement_documents: Mapped[List["RequirementDocument"]] = relationship("RequirementDocument", back_populates="project", cascade="all, delete-orphan")
     traceability_links: Mapped[List["TraceabilityLink"]] = relationship("TraceabilityLink", back_populates="project", cascade="all, delete-orphan")
+    prioritization_overrides: Mapped[List["PrioritizationOverride"]] = relationship("PrioritizationOverride", back_populates="project", cascade="all, delete-orphan")
 
 
 class SourceFile(Base):
@@ -375,3 +376,19 @@ class EvidenceRecord(Base):
 
     project: Mapped["Project"] = relationship("Project", back_populates="evidence_records")
     execution: Mapped["Execution"] = relationship("Execution", back_populates="evidence")
+
+
+class PrioritizationOverride(Base):
+    __tablename__ = "prioritization_overrides"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    project_id: Mapped[str] = mapped_column(String(36), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    target_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    manual_priority: Mapped[str] = mapped_column(String(50), nullable=False)  # HIGH, MEDIUM, LOW
+    manual_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    override_reason: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=get_utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=get_utc_now, onupdate=get_utc_now)
+
+    project: Mapped["Project"] = relationship("Project", back_populates="prioritization_overrides")
+

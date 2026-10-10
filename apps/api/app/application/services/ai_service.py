@@ -295,18 +295,30 @@ class AIService:
                     if proposals:
                         return proposals, True
 
-        # Deterministic proposals covering all required categories
+        # Dynamic deterministic proposals covering all required categories using actual target function AST
+        p_names = [p.get("name", f"param_{i}") for i, p in enumerate(fn.parameters)] if (fn and fn.parameters) else ["pressure", "altitude"]
+        param_0 = p_names[0]
+        param_1 = p_names[1] if len(p_names) > 1 else None
+
+        nom_inputs = {p.get("name", f"param_{i}"): 100 for i, p in enumerate(fn.parameters)} if (fn and fn.parameters) else {"pressure": 950, "altitude": 5000}
+        b_low_inputs = dict(nom_inputs)
+        b_low_inputs[param_0] = 901
+        b_off_inputs = dict(nom_inputs)
+        b_off_inputs[param_0] = 900
+        inv_inputs = dict(nom_inputs)
+        inv_inputs[param_0] = -100
+
         proposals = [
             AITestCaseProposal(
                 proposalId=str(uuid.uuid4()),
-                name=f"TC_{fn_name}_Nominal_Cruise",
+                name=f"TC_{fn_name}_Nominal_Operation",
                 targetFunctionId=fn.id if fn else None,
                 targetFunctionName=fn_name,
                 category="NORMAL",
-                inputs={"pressure": 950, "altitude": 5000},
+                inputs=nom_inputs,
                 expectedOutputs={"return": 1},
                 hasApprovedOracle=True,
-                rationale="Validates nominal pressurization under standard flight parameters.",
+                rationale=f"Validates nominal operation for {fn_name} under standard parameters.",
                 requirementIds=[req_id_str],
                 suggestedAssertions=[{"name": "return", "expected": 1, "op": "=="}],
                 provenance=ProvenanceType.DERIVED_FROM_SOURCE,
@@ -314,14 +326,14 @@ class AIService:
             ),
             AITestCaseProposal(
                 proposalId=str(uuid.uuid4()),
-                name=f"TC_{fn_name}_Boundary_Pressure_Lower_Active",
+                name=f"TC_{fn_name}_Boundary_{param_0.capitalize()}_Active",
                 targetFunctionId=fn.id if fn else None,
                 targetFunctionName=fn_name,
                 category="BOUNDARY",
-                inputs={"pressure": 901, "altitude": 9999},
+                inputs=b_low_inputs,
                 expectedOutputs={"return": 1},
                 hasApprovedOracle=True,
-                rationale="Stress tests condition boundary (pressure > 900 && altitude < 10000) at 1 unit above threshold.",
+                rationale=f"Stress tests condition boundary for {param_0} at active threshold edge.",
                 requirementIds=[req_id_str],
                 suggestedAssertions=[{"name": "return", "expected": 1, "op": "=="}],
                 provenance=ProvenanceType.DERIVED_FROM_SOURCE,
@@ -329,14 +341,14 @@ class AIService:
             ),
             AITestCaseProposal(
                 proposalId=str(uuid.uuid4()),
-                name=f"TC_{fn_name}_Boundary_Pressure_Exact_Threshold_Off",
+                name=f"TC_{fn_name}_Boundary_{param_0.capitalize()}_Threshold_Off",
                 targetFunctionId=fn.id if fn else None,
                 targetFunctionName=fn_name,
                 category="BOUNDARY",
-                inputs={"pressure": 900, "altitude": 5000},
+                inputs=b_off_inputs,
                 expectedOutputs={"return": 0},
                 hasApprovedOracle=True,
-                rationale="Tests exact boundary edge (pressure == 900); strict '>' comparator must evaluate False.",
+                rationale=f"Tests exact boundary edge for {param_0} where condition evaluates False.",
                 requirementIds=[req_id_str],
                 suggestedAssertions=[{"name": "return", "expected": 0, "op": "=="}],
                 provenance=ProvenanceType.DERIVED_FROM_SOURCE,
@@ -344,14 +356,14 @@ class AIService:
             ),
             AITestCaseProposal(
                 proposalId=str(uuid.uuid4()),
-                name=f"TC_{fn_name}_Invalid_Negative_Pressure",
+                name=f"TC_{fn_name}_Invalid_Negative_Input",
                 targetFunctionId=fn.id if fn else None,
                 targetFunctionName=fn_name,
                 category="INVALID_INPUT",
-                inputs={"pressure": -100, "altitude": 5000},
+                inputs=inv_inputs,
                 expectedOutputs={"return": 0},
                 hasApprovedOracle=True,
-                rationale="Negative pressure violates physical atmospheric limits; verifies fail-safe behavior.",
+                rationale=f"Negative input for {param_0} violates valid domain; verifies fail-safe behavior.",
                 requirementIds=[req_id_str],
                 suggestedAssertions=[{"name": "return", "expected": 0, "op": "=="}],
                 provenance=ProvenanceType.DERIVED_FROM_SOURCE,
@@ -359,29 +371,29 @@ class AIService:
             ),
             AITestCaseProposal(
                 proposalId=str(uuid.uuid4()),
-                name=f"TC_{fn_name}_Fault_Sensor_Stuck_Zero",
+                name=f"TC_{fn_name}_Fault_Isolation",
                 targetFunctionId=fn.id if fn else None,
                 targetFunctionName=fn_name,
                 category="FAULT_INJECTION",
-                inputs={"pressure": 950, "altitude": 5000},
+                inputs=nom_inputs,
                 expectedOutputs={"return": 0},
                 hasApprovedOracle=False,
-                rationale="Simulates hardware disconnect where sensor_read returns 0 despite valid ambient pressure.",
-                requirementIds=["LLR-SEN-001"],
-                uncertainties=["Requires sensor_read stub configuration to return 0 during test execution."],
+                rationale=f"Simulates sensor or interface disconnect during {fn_name} invocation.",
+                requirementIds=[req_id_str],
+                uncertainties=["Requires peripheral stub configuration during test execution."],
                 provenance=ProvenanceType.AI_INFERRED,
                 status=ProposalReviewStatus.PROPOSED,
             ),
             AITestCaseProposal(
                 proposalId=str(uuid.uuid4()),
-                name=f"TC_{fn_name}_Scenario_Emergency_Descent",
+                name=f"TC_{fn_name}_Scenario_Dynamic_Stress",
                 targetFunctionId=fn.id if fn else None,
                 targetFunctionName=fn_name,
                 category="SCENARIO",
-                inputs={"pressure": 1050, "altitude": 14000},
+                inputs=nom_inputs,
                 expectedOutputs={"return": 0},
                 hasApprovedOracle=True,
-                rationale="Simulates rapid emergency descent crossing 10,000 ft ceiling threshold.",
+                rationale=f"Simulates rapid envelope crossing under dynamic operational conditions.",
                 requirementIds=[req_id_str],
                 suggestedAssertions=[{"name": "return", "expected": 0, "op": "=="}],
                 provenance=ProvenanceType.AI_INFERRED,

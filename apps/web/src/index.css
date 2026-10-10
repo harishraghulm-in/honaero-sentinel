@@ -1,94 +1,119 @@
 @import "tailwindcss";
 
-@theme {
-  --color-ide-bg: #10151C;
-  --color-ide-activity: #0D1219;
-  --color-ide-sidebar: #151B23;
-  --color-ide-editor: #10151C;
-  --color-ide-panel: #151B23;
-  --color-ide-elevated: #222C38;
-  --color-ide-border: #35414E;
+@layer base {
+  :root {
+    --font-heading: 'Space Grotesk', system-ui, -apple-system, sans-serif;
+    --font-sans: 'IBM Plex Sans', system-ui, -apple-system, sans-serif;
+    --font-mono: 'IBM Plex Mono', 'Monaco', 'Courier New', monospace;
+  }
 
-  --color-ide-text-primary: #E7ECF1;
-  --color-ide-text-secondary: #A2ADBA;
+  body {
+    font-family: var(--font-sans);
+    background-color: #0B0E14;
+    color: #E6EDF3;
+    overflow-x: hidden;
+    letter-spacing: -0.01em;
+  }
+  
+  h1, h2, h3, .font-heading {
+    font-family: var(--font-heading);
+    letter-spacing: -0.02em;
+  }
 
-  --color-ide-accent: #55B8C7;
-  --color-ide-action: #6596D8;
-  --color-ide-success: #65B889;
-  --color-ide-warning: #D8A85C;
-  --color-ide-error: #E47777;
-
-  /* Font overrides */
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  --font-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
-}
-
-body {
-  background-color: var(--color-ide-bg);
-  color: var(--color-ide-text-primary);
-  font-family: var(--font-sans);
-  font-size: 13px;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  overflow: hidden;
-}
-
-h1, h2, h3, h4, h5, h6 {
-  font-weight: 500;
-  letter-spacing: -0.01em;
-}
-
-code, pre, .font-mono {
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  *,
-  ::before,
-  ::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-    scroll-behavior: auto !important;
+  code, pre, .font-mono {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
   }
 }
 
-.highlight-scan-line {
-  background-color: rgba(85, 184, 199, 0.15);
+/* Dynamic lighting and aerospace button glow utilities */
+.btn-aerospace-glow {
+  position: relative;
+  overflow: hidden;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 0 10px rgba(0, 229, 255, 0.25), inset 0 1px 1px rgba(255, 255, 255, 0.4);
 }
 
-.diagnostic-marker {
-  text-decoration: underline wavy var(--color-ide-error);
-  background-color: rgba(228, 119, 119, 0.15);
+.btn-aerospace-glow:hover {
+  box-shadow: 0 0 22px rgba(0, 229, 255, 0.55), 0 0 35px rgba(0, 229, 255, 0.25), inset 0 1px 1px rgba(255, 255, 255, 0.7);
+  transform: translateY(-1px);
 }
 
-/* Custom Scrollbar for IDE feel */
+.btn-aerospace-glow:active {
+  transform: translateY(0);
+}
+
+/* Light beam sweep shimmer effect on buttons */
+.btn-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-shimmer::after {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -60%;
+  width: 40%;
+  height: 200%;
+  background: linear-gradient(
+    60deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.25) 50%,
+    transparent 100%
+  );
+  transform: rotate(25deg);
+  pointer-events: none;
+  animation: shimmer-sweep 4s infinite cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes shimmer-sweep {
+  0% {
+    left: -80%;
+  }
+  30% {
+    left: 140%;
+  }
+  100% {
+    left: 140%;
+  }
+}
+
+/* Radar beacon animation for floating AI assistant */
+@keyframes radar-pulse {
+  0% {
+    transform: scale(0.95);
+    opacity: 0.8;
+  }
+  50% {
+    transform: scale(1.4);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1.4);
+    opacity: 0;
+  }
+}
+
+.animate-radar {
+  animation: radar-pulse 2.4s cubic-bezier(0, 0.2, 0.8, 1) infinite;
+}
+
+/* Custom technical scrollbar */
 ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
-}
-::-webkit-scrollbar-track {
-  background: var(--color-ide-bg);
-}
-::-webkit-scrollbar-thumb {
-  background: var(--color-ide-border);
-  border: 2px solid var(--color-ide-bg);
-  border-radius: 5px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: var(--color-ide-text-secondary);
+  width: 6px;
+  height: 6px;
 }
 
-/* Resizer handle */
-.resize-handle-y {
-  height: 4px;
-  cursor: row-resize;
-  background-color: var(--color-ide-border);
-  opacity: 0;
-  transition: opacity 0.2s;
+::-webkit-scrollbar-track {
+  background: #0B0E14;
 }
-.resize-handle-y:hover, .resize-handle-y:active {
-  opacity: 1;
-  background-color: var(--color-ide-accent);
+
+::-webkit-scrollbar-thumb {
+  background: #21262D;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #30363D;
 }

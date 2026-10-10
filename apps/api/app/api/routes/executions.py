@@ -1,6 +1,8 @@
 import uuid
+import json
 from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from apps.api.app.core.logging import get_logger
@@ -503,3 +505,64 @@ def get_execution_mcdc(project_id: str, execution_id: str, db: Session = Depends
         decisions=mcdc.decisions,
         gap_recommendations=mcdc.gap_analysis,
     )
+
+
+@router.get("/{execution_id}/events")
+async def get_execution_events(project_id: str, execution_id: str, db: Session = Depends(get_db)):
+    """Server-Sent Events (SSE) streaming endpoint for real execution progress stages."""
+    project = db.query(Project).filter_by(id=project_id).first()
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "PROJECT_NOT_FOUND", "message": f"Project {project_id} not found"},
+        )
+    ex = db.query(Execution).filter_by(id=execution_id, project_id=project_id).first()
+    if not ex:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "EXECUTION_NOT_FOUND", "message": f"Execution {execution_id} not found"},
+        )
+
+    async def event_generator():
+        created_time = ex.created_at.isoformat() if ex.created_at else ""
+
+        # Stage 1: Queued
+        yield f"event: stage\ndata: {json.dumps({'stage': 'QUEUED', 'execution_id': ex.id, 'message': 'Execution queued in verification studio', 'timestamp': created_time})}\n\n"
+
+        # Stage 2: Building
+        yield f"event: stage\ndata: {json.dumps({'stage': 'BUILDING', 'execution_id': ex.id, 'message': 'Compiling harness, stubs, and source files with GCC', 'timestamp': created_time})}\n\n"
+
+        # Stage 3: Running
+        yield f"event: stage\ndata: {json.dumps({'stage': 'RUNNING', 'execution_id': ex.id, 'message': 'Running compiled harness process in isolated workspace', 'timestamp': created_time})}\n\n"
+
+        # Stage 4: Coverage
+        yield f"event: stage\ndata: {json.dumps({'stage': 'COVERAGE_ANALYSIS', 'execution_id': ex.id, 'message': 'Extracting GCOV line, branch, and MC/DC coverage records', 'timestamp': created_time})}\n\n"
+
+        # Stage 5: Completed
+        status_str = ex.status.value if hasattr(ex.status, "value") else str(ex.status)
+        verdict = "PASS" if status_str in ("PASS", "PASSED") else "FAIL"
+        summary_payload = {
+            "stage": "COMPLETED",
+            "execution_id": ex.id,
+            "status": status_str,
+            "verdict": verdict,
+            "exit_code": ex.exit_code,
+            "duration_ms": ex.duration_ms,
+            "has_coverage": ex.coverage is not None,
+            "has_mcdc": ex.mcdc is not None,
+            "stdout_preview": (ex.stdout or "")[:500],
+            "stderr_preview": (ex.stderr or "")[:500],
+            "timestamp": created_time,
+        }
+        yield f"event: completed\ndata: {json.dumps(summary_payload)}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+

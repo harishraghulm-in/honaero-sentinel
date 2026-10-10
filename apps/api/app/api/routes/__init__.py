@@ -9,6 +9,11 @@ from apps.api.app.api.routes import (
     executions,
     traceability,
     evidence,
+    requirements,
+    config,
+    ai,
+    prioritization,
+    reports,
 )
 
 __all__ = [
@@ -22,5 +27,10 @@ __all__ = [
     "executions",
     "traceability",
     "evidence",
+    "requirements",
+    "config",
+    "ai",
+    "prioritization",
+    "reports",
 ]
 

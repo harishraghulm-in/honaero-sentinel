@@ -1,8 +1,23 @@
+import os
 import shutil
 from functools import lru_cache
 from pathlib import Path
 from typing import Optional
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def _discover_tool(name: str, fallback_windows_path: str) -> str:
+    # On Windows, check standard working compiler paths first (e.g. MSYS2 ucrt64) to avoid WDAC policy blocks on user-space winget packages
+    if Path(fallback_windows_path).exists():
+        return fallback_windows_path
+    for p in [r"C:\msys64\ucrt64\bin", r"C:\msys64\mingw64\bin", r"C:\MinGW\bin"]:
+        candidate = Path(p) / f"{name}.exe"
+        if candidate.exists():
+            return str(candidate)
+    found = shutil.which(name)
+    if found:
+        return found
+    return name
 
 
 class Settings(BaseSettings):
@@ -26,8 +41,8 @@ class Settings(BaseSettings):
     DB_ECHO: bool = False
 
     # Toolchains
-    GCC_PATH: str = shutil.which("gcc") or "gcc"
-    GCOV_PATH: str = shutil.which("gcov") or "gcov"
+    GCC_PATH: str = _discover_tool("gcc", r"C:\msys64\ucrt64\bin\gcc.exe")
+    GCOV_PATH: str = _discover_tool("gcov", r"C:\msys64\ucrt64\bin\gcov.exe")
     CLANG_PATH: str = "clang"
     CMAKE_PATH: str = "cmake"
 
@@ -37,7 +52,11 @@ class Settings(BaseSettings):
     MAX_SOURCE_SIZE_BYTES: int = 5 * 1024 * 1024  # 5MB
     MAX_ARTIFACT_SIZE_BYTES: int = 50 * 1024 * 1024  # 50MB
     ARTIFACT_STORAGE_PATH: Path = Path("./storage/artifacts")
-    WORKSPACE_BASE_PATH: Path = Path("./workspaces")
+    WORKSPACE_BASE_PATH: Path = (
+        Path(os.environ.get("TEMP", os.environ.get("TMP", "./workspaces"))) / "sentinel_workspaces"
+        if os.name == "nt"
+        else Path("./workspaces")
+    )
 
     # Docker Worker
     DOCKER_IMAGE: str = "honaero-sentinel/execution-worker:latest"
